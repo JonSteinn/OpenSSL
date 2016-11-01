@@ -1,0 +1,6 @@
+private key passphrase: tussuduft
+
+Fields entered in .scr:
+	- country: is
+	- common name: server
+	- password: server
