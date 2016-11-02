@@ -46,6 +46,10 @@
 
  SSL_CTX *ssl_ctx;
 
+ static GTree* chat_room_tree;
+ static GTree* client_tree;
+
+
  void sigint_handler(int sig)
  {
      UNUSED(sig);
