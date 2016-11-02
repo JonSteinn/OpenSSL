@@ -9,7 +9,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <sys/types.h>
+#include <sys/types.h> 
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -29,18 +29,12 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 
      /* If either of the pointers is NULL or the addresses
         belong to different families, we abort. */
-     g_assert((_addr1 == NULL) || (_addr2 == NULL) ||
-              (_addr1->sin_family != _addr2->sin_family));
+     g_assert((_addr1 == NULL) || (_addr2 == NULL) || (_addr1->sin_family != _addr2->sin_family));
 
-     if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) {
-          return -1;
-     } else if (_addr1->sin_addr.s_addr > _addr2->sin_addr.s_addr) {
-          return 1;
-     } else if (_addr1->sin_port < _addr2->sin_port) {
-          return -1;
-     } else if (_addr1->sin_port > _addr2->sin_port) {
-          return 1;
-     }
+     if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) return -1;
+     else if (_addr1->sin_addr.s_addr > _addr2->sin_addr.s_addr) return 1;
+     else if (_addr1->sin_port < _addr2->sin_port) return -1;
+     else if (_addr1->sin_port > _addr2->sin_port) return 1;
      return 0;
 }
 
@@ -58,7 +52,8 @@ int main(int argc, char **argv)
 {
      struct sockaddr_in server, client;
 
-     if (argc != 2) {
+     if (argc != 2) 
+     {
           fprintf(stderr, "Usage: %s <port>\n", argv[0]);
           exit(EXIT_FAILURE);
      }
