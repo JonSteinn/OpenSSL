@@ -32,8 +32,8 @@
 
 #define MAX_QUEUED 2
 
-void exit_error(char *msg)
-int init_server(int port)
+void exit_error(char *msg);
+int init_server(int port);
 
 int main(int argc, char **argv)
 {
@@ -44,9 +44,9 @@ int main(int argc, char **argv)
 	SSL_load_error_strings();
 	SSL_CTX *ssl;
 	if ((ssl = SSL_CTX_new(TLSv1_method())) == NULL) exit_error("SSL CTX");
-	if (SSL_CTX_use_certificate_file(ssl_ctx, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
-	if (SSL_CTX_use_PrivateKey_file(ssl_ctx, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
-	if (SSL_CTX_check_private_key(ssl_ctx) != 1) exit_error("match");
+	if (SSL_CTX_use_certificate_file(ssl, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
+	if (SSL_CTX_use_PrivateKey_file(ssl, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
+	if (SSL_CTX_check_private_key(ssl) != 1) exit_error("match");
 
 	int server_fd = init_server(server_port);
 
