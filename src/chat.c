@@ -53,7 +53,18 @@ void exit_error(char *msg)
 	exit(EXIT_FAILURE);
 }
 
-// TODO: Add comments from getpasswd file that comes with assignment
+/* To read a password without echoing it to the console.
+ *
+ * We assume that stdin is not redirected to a pipe and we won't
+ * access tty directly. It does not make much sense for this program
+ * to redirect input and output.
+ *
+ * This function is not safe to terminate. If the program crashes
+ * during getpasswd or gets terminated, then echoing may remain
+ * disabled for the shell (that depends on shell, operating system and
+ * C library). To restore echoing, type 'reset' into the sell and
+ * press enter.
+ */
 void getpasswd(const char *prompt, char *passwd, size_t size)
 {
 	struct termios old_flags, new_flags;
