@@ -83,21 +83,64 @@ gint fd_cmp(gconstpointer fd1,  gconstpointer fd2, gpointer G_GNUC_UNUSED data)
 	return GPOINTER_TO_INT(fd1) - GPOINTER_TO_INT(fd2);
 }
 
+/* Sets up socket and error checks while doing so. We allocate the 
+ * sockaddr_in struct's resources after this functions since we do 
+ * not need it elsewhere.
+ *
+ * Paramaters: port number of server
+ * Return value: file descriptor of server */
+int init_server(int port)
+{
+	int socket_fd;
+	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
+	
+	struct sockaddr_in server;
+	memset(&server, 0, sizeof(server));
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = htonl(INADDR_ANY);
+	server.sin_port = htons(port);
+
+	if (bind(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("bind");
+	if (listen(socket_fd, 1) < 0) exit_error("listen");
+
+	return socket_fd;
+}
+
 
 int main(int argc, char **argv)
 {
+	if (argc < 2) exit_error("argument");
+	const int server_port = strtol(argv[1], NULL, 0);
+
 	// Install the sigint handler for key interupt
 	signal(SIGINT, sigint_handler);
 	SSL_library_init();
 	SSL_load_error_strings();
 	ssl_ctx = SSL_CTX_new(TLSv1_method());
 	
-	if (!ssl_ctx) exit_error("ssl_ctx");
+	if (ssl_ctx == NULL) exit_error("ssl_ctx");
 	if (SSL_CTX_use_certificate_file(ssl_ctx, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
 	if (SSL_CTX_use_PrivateKey_file(ssl_ctx, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
-	if ( !SSL_CTX_check_private_key(ssl_ctx) ) exit_error("match");
+	if (SSL_CTX_check_private_key(ssl_ctx) != 1) exit_error("match");
 
-	/* Receive and handle messages. */
+	int server_fd = init_server(server_port);
 
+	// TODO: Data structures for rooms and clients
+
+	int client_fd;
+	struct sockaddr_in client;
+	while (1)
+	{
+		memset(&client, 0, sizeof(client));
+		socklen_t scklen = (socklen_t)sizeof(client);
+		if ((client_fd = accept(server_fd, (struct sockaddr *)&client, &scklen)) < 0) exit_error("accept");
+		char buf[512];
+		memset(&buf, 0, 512);
+		recv(client_fd, buf, 512, 0);
+		fprintf(stdout, "%s\n", buf);
+		fflush(stdout);
+		close(client_fd);
+	}
+	
 	exit(EXIT_SUCCESS);
 }
