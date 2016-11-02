@@ -38,14 +38,30 @@
 
  #define TIMEOUT_SEC 120
 
- #define PASSWORDS_FILE "passwords.ini"
- #define CERTIFICATE_FILE "fd.crt"
- #define PRIVATE_KEY_FILE "fd.key"
+ #define CERTIFICATE_FILE "encryption/fd.crt"
+ #define PRIVATE_KEY_FILE "encryption/fd.key"
 
  #define UNUSED(x) (void)(x)
  #define MAX_CLIENTS 5
 
  SSL_CTX *ssl_ctx;
+
+ void sigint_handler(int sig)
+ {
+     UNUSED(sig);
+     g_tree_destroy(chat_room_tree);
+     g_tree_destroy(client_tree);
+     SSL_CTX_free(ssl_ctx);
+     RAND_cleanup();
+     ENGINE_cleanup();
+     CONF_modules_unload(1);
+     CONF_modules_free();
+     EVP_cleanup();
+     ERR_free_strings();
+     ERR_remove_state(0);
+     CRYPTO_cleanup_all_ex_data();
+     exit(0);
+ }
 
 /* This can be used to build instances of GTree that index on
    the address of a connection. */
