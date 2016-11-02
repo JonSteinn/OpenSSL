@@ -138,7 +138,8 @@ int main(int argc, char **argv)
 		memset(&buf, 0, 512);
 		recv(client_fd, buf, 512, 0);
 		fprintf(stdout, "%s\n", buf);
-		fflush(stdout);		
+		fflush(stdout);
+		close(client_fd);
 	}
 	
 	exit(EXIT_SUCCESS);
