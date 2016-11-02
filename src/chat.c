@@ -53,6 +53,31 @@ void exit_error(char *msg)
 	exit(EXIT_FAILURE);
 }
 
+// TODO: Add comments from getpasswd file that comes with assignment
+void getpasswd(const char *prompt, char *passwd, size_t size)
+{
+	struct termios old_flags, new_flags;
+	/* Clear out the buffer content */
+	memset(passwd, 0, size);
+	/* Disable echo */
+	tcgetattr(fileno(stdin), &old_flags);
+	memcpy(&new_flags, &old_flags, sizeof(old_flags));
+	new_flags.c_lflag &= ~ECHO;
+	new_flags.c_lflag |= ECHONL;
+	if (tcsetattr(fileno(stdin), TCSANOW, &new_flags) != 0) exit_error("tcsetattr");
+	/* Write the prompt. */
+	write (STDOUT_FILENO, prompt, strlen(prompt));
+	fsync(STDOUT_FILENO);
+	fgets(passwd, size, stdin);
+	
+	/* The result in passwd is '\0' terminated and may contain a final
+   * '\n'. If it exists, we remove it.
+   */ 
+	if (passwd[strlen(passwd) -1] == '\n') passwd[strlen(passwd)-1] = '\0';
+	/* Restore the terminal */
+	if (tcsetattr(fileno(stdin), TCSANOW, &old_flags) != 0) exit_error("tcsetattr");
+}
+
 static void initialize_exitfd(void)
 {
 	/* Establish the self pipe for signal handling. */
@@ -85,7 +110,6 @@ static void initialize_exitfd(void)
 	if (sigaction(SIGTERM, &sa, NULL) == -1) exit_error("sigaction");
 }
 
-
 /* The next two variables are used to access the encrypted stream to
  * the server. The socket file descriptor server_fd is provided for
  * select (if needed), while the encrypted communication should use
@@ -97,19 +121,17 @@ static SSL *server_ssl;
 /* This variable shall point to the name of the user. The initial value
    is NULL. Set this variable to the username once the user managed to be
    authenticated. */
-static char *user;
+//static char *user;
 
 /* This variable shall point to the name of the chatroom. The initial
    value is NULL (not member of a chat room). Set this variable whenever
    the user changed the chat room successfully. */
-static char *chatroom;
+//static char *chatroom;
 
 /* This prompt is used by the readline library to ask the user for
  * input. It is good style to indicate the name of the user and the
  * chat room he is in as part of the prompt. */
 static char *prompt;
-
-
 
 /* When a line is entered using the readline library, this function
    gets called to handle the entered line. Implement the code to
@@ -159,7 +181,7 @@ void readline_callback(char *line)
 			rl_redisplay();
 			return;
 		}
-		char *chatroom = strdup(&(line[i]));
+		//char *chatroom = strdup(&(line[i]));
 
 		/* Process and send this information to the server. */
 
@@ -201,8 +223,8 @@ void readline_callback(char *line)
 			rl_redisplay();
 			return;
 		}
-		char *receiver = strndup(&(line[i]), j - i - 1);
-		char *message = strndup(&(line[j]), j - i - 1);
+		//char *receiver = strndup(&(line[i]), j - i - 1);
+		//char *message = strndup(&(line[j]), j - i - 1);
 
 		/* Send private message to receiver. */
 
@@ -220,7 +242,7 @@ void readline_callback(char *line)
 			rl_redisplay();
 			return;
 		}
-		char *new_user = strdup(&(line[i]));
+		//char *new_user = strdup(&(line[i]));
 		char passwd[48];
 		getpasswd("Password: ", passwd, 48);
 
@@ -243,7 +265,8 @@ void readline_callback(char *line)
 	fsync(STDOUT_FILENO);
 }
 
-int main(int argc, char **argv)
+//int main(int argc, char **argv)
+int main()
 {
 	initialize_exitfd();
 
@@ -329,7 +352,7 @@ int main(int argc, char **argv)
 			{
 				if (read(exitfd[0], &signum, sizeof(signum)) == -1) 
 				{
-					if (errno = EAGAIN) break;
+					if (errno == EAGAIN) break;
 					else exit_error("read()");
 				}
 			}
