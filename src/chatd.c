@@ -42,11 +42,11 @@ int main(int argc, char **argv)
 
 	SSL_library_init();
 	SSL_load_error_strings();
-	SSL_CTX *ssl;
-	if ((ssl = SSL_CTX_new(TLSv1_method())) == NULL) exit_error("SSL CTX");
-	if (SSL_CTX_use_certificate_file(ssl, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
-	if (SSL_CTX_use_PrivateKey_file(ssl, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
-	if (SSL_CTX_check_private_key(ssl) != 1) exit_error("match");
+	SSL_CTX *ctx;
+	if ((ctx = SSL_CTX_new(TLSv1_method())) == NULL) exit_error("SSL CTX");
+	if (SSL_CTX_use_certificate_file(ctx, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
+	if (SSL_CTX_use_PrivateKey_file(ctx, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
+	if (SSL_CTX_check_private_key(ctx) != 1) exit_error("match");
 
 	int server_fd = init_server(server_port);
 
@@ -59,11 +59,14 @@ int main(int argc, char **argv)
 		memset(&client, 0, sizeof(client));
 		socklen_t scklen = (socklen_t)sizeof(client);
 		if ((client_fd = accept(server_fd, (struct sockaddr *)&client, &scklen)) < 0) exit_error("accept");
-		char buf[512];
-		memset(&buf, 0, 512);
-		recv(client_fd, buf, 512, 0);
-		fprintf(stdout, "%s\n", buf);
-		fflush(stdout);
+
+		SSL *ssl;
+		if ((ssl = SSL_new(ctx)) == NULL) exit_error("SSL"); //TODO, dont exit
+		if (SSL_set_fd(ssl, client_fd) == 0) exit_error("SSL fd"); // TODO, don't exit
+		if (SSL_accept(ssl) < 0) exit_error("SSL accept"); //TODO, don't exit
+		if (SSL_write(ssl, "WELCOME", strlen("WELCOME")) < 0) exit_error("SSL write"); // TODO, don't exit
+
+
 		close(client_fd);
 	}
 	
