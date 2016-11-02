@@ -38,8 +38,8 @@
 
  #define TIMEOUT_SEC 120
 
- #define CERTIFICATE_FILE "encryption/fd.crt"
- #define PRIVATE_KEY_FILE "encryption/fd.key"
+ #define CERTIFICATE_FILE "../encryption/fd.crt"
+ #define PRIVATE_KEY_FILE "../encryption/fd.key"
 
  #define UNUSED(x) (void)(x)
  #define MAX_CLIENTS 5
