@@ -30,6 +30,7 @@
 #include <readline/history.h>
 
 
+
 /* This variable holds a file descriptor of a pipe on which we send a
  * number if a signal is received. */
 static int exitfd[2];
@@ -182,6 +183,7 @@ void readline_callback(char *line)
         }
         //char *chatroom = strdup(&(line[i]));
 
+				// TODO:
         /* Process and send this information to the server. */
 
         /* Maybe update the prompt. */
@@ -192,6 +194,7 @@ void readline_callback(char *line)
     }
     if (strncmp("/list", line, 5) == 0) 
     {
+				// TODO:
         /* Query all available chat rooms */
         return;
     }
@@ -225,6 +228,7 @@ void readline_callback(char *line)
         //char *receiver = strndup(&(line[i]), j - i - 1);
         //char *message = strndup(&(line[j]), j - i - 1);
 
+				// TODO:
         /* Send private message to receiver. */
 
         return;
@@ -245,6 +249,7 @@ void readline_callback(char *line)
         char passwd[48];
         getpasswd("Password: ", passwd, 48);
 
+				// TODO
         /* Process and send this information to the server. */
 
         /* Maybe update the prompt. */
@@ -255,6 +260,7 @@ void readline_callback(char *line)
     }
     if (strncmp("/who", line, 4) == 0) 
     {
+				// TODO
         /* Query all available users */
         return;
     }
@@ -264,15 +270,35 @@ void readline_callback(char *line)
     fsync(STDOUT_FILENO);
 }
 
-//int main(int argc, char **argv)
-int main()
+int init_server_connection(int port)
 {
+	int socket_fd;
+	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
+	
+	struct sockaddr_in server;
+	memset(&server, 0, sizeof(server));
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = htonl(atoi("127.0.0.1"));
+	server.sin_port = htons(port);
+
+	if (connect(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("connect");
+
+	return socket_fd;
+}
+
+int main(int argc, char **argv)
+{
+		if (argc < 2) exit_error("args");
+		const int server_port = strtol(argv[1], NULL, 0);
+		
     initialize_exitfd();
 
     /* Initialize OpenSSL */
     SSL_library_init();
     SSL_load_error_strings();
-    SSL_CTX *ssl_ctx = SSL_CTX_new(TLSv1_client_method());
+    SSL_CTX *ssl_ctx;
+		if ((ssl_ctx = SSL_CTX_new(TLSv1_client_method())) == NULL) exit_error("ssl ctx");
+		
 
     /* TODO:
     * We may want to use a certificate file if we self sign the
@@ -285,10 +311,8 @@ int main()
 
     server_ssl = SSL_new(ssl_ctx);
 
-    /* Create and set up a listening socket. The sockets you
-    * create here can be used in select calls, so do not forget
-    * them.
-    */
+    server_fd = init_server_connection(server_port);
+		
 
     /* Use the socket for the SSL connection. */
     SSL_set_fd(server_ssl, server_fd);
@@ -301,6 +325,7 @@ int main()
     */
 
     /* Set up secure connection to the chatd server. */
+		if (SSL_connect(server_ssl) < 0) exit_error("SSL connect");
 
     /* Read characters from the keyboard while waiting for input.
     */
