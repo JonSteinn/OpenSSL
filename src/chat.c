@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <signal.h>
+#include <arpa/inet.h>
 
 /* Secure socket layer headers */
 #include <openssl/ssl.h>
@@ -278,7 +279,7 @@ int init_server_connection(int port)
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = htonl(atoi("127.0.0.1"));
+	server.sin_addr.s_addr = inet_addr("127.0.0.1");
 	server.sin_port = htons(port);
 
 	if (connect(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("connect");
