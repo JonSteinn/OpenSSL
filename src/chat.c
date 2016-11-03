@@ -371,8 +371,15 @@ int main(int argc, char **argv)
         }
         if (FD_ISSET(exitfd[0], &rfds)) 
         {
-            /* We received a signal. */
-            int signum;
+            
+						char msg[512];
+						SSL_read(server_ssl, msg, 512);
+						fprintf(stdout, "%s\n", msg);
+						fflush(stdout);
+
+						// We received a signal.
+            /*
+						int signum;
             while (1) 
             {
                 if (read(exitfd[0], &signum, sizeof(signum)) == -1) 
@@ -383,13 +390,14 @@ int main(int argc, char **argv)
             }
             if (signum == SIGINT) 
             {
-                /* Don't do anything. */
+                // Don't do anything.
             } 
             else if (signum == SIGTERM) 
             {
-                /* Clean-up and exit. */
+                // Clean-up and exit.
                 break;
             }
+						*/
 
         }
         if (FD_ISSET(STDIN_FILENO, &rfds)) rl_callback_read_char();
