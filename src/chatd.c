@@ -1,11 +1,3 @@
-/* A TCP echo server with timeouts.
-*
-* Note that you will not need to use select and the timeout for a
-* tftp server. However, select is also useful if you want to receive
-* from multiple sockets at the same time. Read the documentation for
-* select on how to do this (Hint: Iterate with FD_ISSET()).
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,9 +24,20 @@
 
 #define MAX_QUEUED 2
 
+/*
+ * Data structure for clients.
+ * */
+struct client_data
+{
+	int fd;
+	SSL *ssl;
+	struct sockaddr_in addr;
+};
+
 void exit_error(char *msg);
 int init_server(int port);
 void client_logger(uint16_t port, char *ip, int status);
+int sockaddr_in_cmp(const void *addr1, const void *addr2);
 
 int main(int argc, char **argv)
 {
@@ -52,6 +55,8 @@ int main(int argc, char **argv)
 	int server_fd = init_server(server_port);
 
 	// TODO: Data structures for rooms and clients
+	GTree* client_collection = g_tree_new(sockaddr_in_cmp);
+	
 
 	int client_fd;
 	struct sockaddr_in client;
@@ -71,7 +76,7 @@ int main(int argc, char **argv)
 		if (SSL_accept(ssl) < 0) exit_error("SSL accept"); //TODO, don't exit
 		if (SSL_write(ssl, "WELCOME", strlen("WELCOME")) < 0) exit_error("SSL write"); // TODO, don't exit
 
-
+		
 		close(client_fd);
 	}
 
@@ -106,6 +111,18 @@ int init_server(int port)
 	if (listen(socket_fd, MAX_QUEUED) < 0) exit_error("listen");
 
 	return socket_fd;
+}
+
+int sockaddr_in_cmp(const void *addr1, const void *addr2)
+{
+	const struct sockaddr_in *_addr1 = addr1;
+	const struct sockaddr_in *_addr2 = addr2;
+	g_assert(_addr1 == NULL || _addr2 == NULL || _addr1->sin_family != _addr2->sin_family);
+	if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) return -1;
+	if (_addr1->sin_addr.s_addr > _addr2->sin_addr.s_addr) return 1;
+	if (_addr1->sin_port < _addr2->sin_port) return -1;
+	if (_addr1->sin_port > _addr2->sin_port) return 1;
+	return 0;
 }
 
 void client_logger(uint16_t port, char *ip, int status)
