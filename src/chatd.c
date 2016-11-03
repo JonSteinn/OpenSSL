@@ -27,13 +27,14 @@
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 
-#define CERTIFICATE "encryption/fd.crt"
-#define PRIVATE_KEY "encryption/fd.key"
+#define CERTIFICATE "../encryption/fd.crt"
+#define PRIVATE_KEY "../encryption/fd.key"
 
 #define MAX_QUEUED 2
 
 void exit_error(char *msg);
 int init_server(int port);
+void client_logger(uint16_t port, char *ip, int status);
 
 int main(int argc, char **argv)
 {
@@ -60,6 +61,10 @@ int main(int argc, char **argv)
 		socklen_t scklen = (socklen_t)sizeof(client);
 		if ((client_fd = accept(server_fd, (struct sockaddr *)&client, &scklen)) < 0) exit_error("accept");
 
+		char *client_ip = inet_ntoa(client.sin_addr);
+		uint16_t client_port = client.sin_port;
+		client_logger(client_port, client_ip, 1);
+
 		SSL *ssl;
 		if ((ssl = SSL_new(ctx)) == NULL) exit_error("SSL"); //TODO, dont exit
 		if (SSL_set_fd(ssl, client_fd) == 0) exit_error("SSL fd"); // TODO, don't exit
@@ -69,7 +74,7 @@ int main(int argc, char **argv)
 
 		close(client_fd);
 	}
-	
+
 	exit(EXIT_SUCCESS);
 }
 
@@ -80,8 +85,8 @@ void exit_error(char *msg)
 	exit(EXIT_FAILURE);
 }
 
-/* Sets up socket and error checks while doing so. We allocate the 
- * sockaddr_in struct's resources after this functions since we do 
+/* Sets up socket and error checks while doing so. We allocate the
+ * sockaddr_in struct's resources after this functions since we do
  * not need it elsewhere.
  *
  * Paramaters: port number of server
@@ -90,7 +95,7 @@ int init_server(int port)
 {
 	int socket_fd;
 	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
-	
+
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
@@ -101,4 +106,42 @@ int init_server(int port)
 	if (listen(socket_fd, MAX_QUEUED) < 0) exit_error("listen");
 
 	return socket_fd;
+}
+
+void client_logger(uint16_t port, char *ip, int status)
+{
+		// Set ISO time
+		time_t rawtime;
+		struct tm *timeinfo;
+		time(&rawtime);
+		timeinfo = localtime(&rawtime);
+		char timestamp[25];
+		memset(timestamp, 0, sizeof(timestamp));
+		strftime(timestamp, 80, "%a, %d %b %Y %X GMT", timeinfo);
+
+		// Open filestream and append to chat.log
+		FILE *tof;
+		if((tof = fopen("chat.log", "a")) == NULL)
+		{
+		        fprintf(stdout, "%s\n","Log error");
+		        return;
+		}
+		fwrite("<", 1, 1, tof);
+		fwrite(timestamp, 1, strlen(timestamp), tof);
+		fwrite("> : <", 1, 5, tof);
+		fwrite(ip, 1, strlen(ip), tof);
+		fwrite("> : <", 1, 5, tof);
+		fprintf(tof, "%d",port );
+		fwrite(">", 1, 2, tof);
+		if(status == 1)
+		{
+			fwrite(" : <CONNECTED>\n", 1, 15, tof);
+		}
+		else
+		{
+			fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
+		}
+
+		fflush(tof);
+		fclose(tof);
 }
