@@ -79,38 +79,6 @@ void getpasswd(const char *prompt, char *passwd, size_t size)
     if (tcsetattr(fileno(stdin), TCSANOW, &old_flags) != 0) exit_error("tcsetattr");
 }
 
-static void initialize_exitfd(void)
-{
-    /* Establish the self pipe for signal handling. */
-    if (pipe(exitfd) == -1) exit_error("pipe()");
-
-    /* Make read and write ends of pipe nonblocking */
-    int flags;
-    flags = fcntl(exitfd[0], F_GETFL);
-    if (flags == -1) exit_error("fcntl-F_GETFL");
-
-    /* Make read end nonblocking */
-    flags |= O_NONBLOCK;
-    if (fcntl(exitfd[0], F_SETFL, flags) == -1) exit_error("fcntl-F_SETFL");
-
-    flags = fcntl(exitfd[1], F_GETFL);
-    if (flags == -1) exit_error("fcntl-F_SETFL");
-
-    /* Make write end nonblocking */
-    flags |= O_NONBLOCK;
-    if (fcntl(exitfd[1], F_SETFL, flags) == -1) exit_error("fcntl-F_SETFL");
-
-    /* Set the signal handler. */
-    struct sigaction sa;
-    sigemptyset(&sa.sa_mask);
-
-    /* Restart interrupted reads()s */
-    sa.sa_flags = SA_RESTART;
-    sa.sa_handler = signal_handler;
-    if (sigaction(SIGINT, &sa, NULL) == -1) exit_error("sigaction");
-    if (sigaction(SIGTERM, &sa, NULL) == -1) exit_error("sigaction");
-}
-
 /* The next two variables are used to access the encrypted stream to
  * the server. The socket file descriptor server_fd is provided for
  * select (if needed), while the encrypted communication should use
@@ -292,8 +260,6 @@ int main(int argc, char **argv)
 		if (argc < 2) exit_error("args");
 		const int server_port = strtol(argv[1], NULL, 0);
 		
-    initialize_exitfd();
-
     /* Initialize OpenSSL */
     SSL_library_init();
     SSL_load_error_strings();
@@ -342,11 +308,11 @@ int main(int argc, char **argv)
         the chat client can break in terrible ways. */
         FD_ZERO(&rfds);
         FD_SET(STDIN_FILENO, &rfds);
-        FD_SET(exitfd[0], &rfds);
+        FD_SET(server_fd, &rfds);
         timeout.tv_sec = 5;
         timeout.tv_usec = 0;
 
-        int r = select(exitfd[0] + 1, &rfds, NULL, NULL, &timeout);
+        int r = select(server_fd+1, &rfds, NULL, NULL, &timeout);
         if (r < 0) 
         {
             if (errno == EINTR) 
@@ -369,40 +335,21 @@ int main(int argc, char **argv)
             rl_redisplay();
             continue;
         }
-        if (FD_ISSET(exitfd[0], &rfds)) 
-        {
-            
-						char msg[512];
-						SSL_read(server_ssl, msg, 512);
-						fprintf(stdout, "%s\n", msg);
-						fflush(stdout);
 
-						// We received a signal.
-            /*
-						int signum;
-            while (1) 
-            {
-                if (read(exitfd[0], &signum, sizeof(signum)) == -1) 
-                {
-                    if (errno == EAGAIN) break;
-                    else exit_error("read()");
-                }
-            }
-            if (signum == SIGINT) 
-            {
-                // Don't do anything.
-            } 
-            else if (signum == SIGTERM) 
-            {
-                // Clean-up and exit.
-                break;
-            }
-						*/
-
-        }
         if (FD_ISSET(STDIN_FILENO, &rfds)) rl_callback_read_char();
 
-        /* Handle messages from the server here! */
+				if (FD_ISSET(server_fd, &rfds))
+				{
+					char msg[512];
+					int size;
+					if ((size = SSL_read(server_ssl, msg, 512)) < 0) exit_error("ERRRRR"); //TODO, dont exit
+					if (size == 0) break;
+					msg[size] = '\0';
+					write(STDOUT_FILENO, msg, strlen(msg));
+					fsync(STDOUT_FILENO);        
+				}
+
+
     }
 
     /* replace by code to shutdown the connection and exit
