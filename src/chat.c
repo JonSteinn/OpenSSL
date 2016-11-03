@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 		if (FD_ISSET(server_fd, &rfds))
 		{
 			int size;
-			if ((size = SSL_read(server_ssl, msg, 512)) < 0)
+			if ((size = SSL_read(server_ssl, buffer, 512)) < 0)
 			{
 				perror("Error receiving message\n");
 				continue;
@@ -76,8 +76,8 @@ int main(int argc, char **argv)
 			else if (size == 0) continue; // <-------- check later
 			else 
 			{
-				msg[size] = '\0';
-				fprintf(stdout, "%s\n", msg);
+				buffer[size] = '\0';
+				fprintf(stdout, "%s\n", buffer);
 				fflush(stdout);
 			}
 		}
