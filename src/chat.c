@@ -18,6 +18,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#define UNUSED(x) (void)(x)
+
 static int server_fd;
 static SSL *server_ssl;
 static SSL_CTX *ssl_ctx;
@@ -31,12 +33,12 @@ void close_connection();
 void client_loop();
 void readline_callback(char *line);
 void request_quit();
-void request_game(char *str);
-void request_join(char *str);
-void request_list(char *str);
-void request_roll(char *str);
-void request_say(char *str);
-void request_user(char *str);
+void request_game();
+void request_join();
+void request_list();
+void request_roll();
+void request_say();
+void request_user();
 void request_who();
 void getpasswd(const char *prompt, char *passwd, size_t size);
 
@@ -170,12 +172,12 @@ void readline_callback(char *line)
 	if (strlen(line) > 0) add_history(line);
 
 	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0)) request_quit();
-	else if (strncmp("/game", line, 5) == 0) request_game(line);
-	else if (strncmp("/join", line, 5) == 0) request_join(line);
-	else if (strncmp("/list", line, 5) == 0) request_list(line);
-	else if (strncmp("/roll", line, 5) == 0) request_roll(line);
-	else if (strncmp("/say", line, 4) == 0) request_say(line);
-	else if (strncmp("/user", line, 5) == 0) request_user(line);
+	else if (strncmp("/game", line, 5) == 0) request_game();
+	else if (strncmp("/join", line, 5) == 0) request_join();
+	else if (strncmp("/list", line, 5) == 0) request_list();
+	else if (strncmp("/roll", line, 5) == 0) request_roll();
+	else if (strncmp("/say", line, 4) == 0) request_say();
+	else if (strncmp("/user", line, 5) == 0) request_user();
 	else if (strncmp("/who", line, 4) == 0) request_who();
 	else
 	{
@@ -190,27 +192,27 @@ void request_quit()
 	rl_callback_handler_remove();
 	running = 0;
 }
-void request_game(char *str)
+void request_game()
 {
 	// TODO
 }
-void request_join(char *str)
+void request_join()
 {
 	// TODO
 }
-void request_list(char *str)
+void request_list()
 {
 	// TODO
 }
-void request_roll(char *str)
+void request_roll()
 {
 	// TODO
 }
-void request_say(char *str)
+void request_say()
 {
 	// TODO
 }
-void request_user(char *str)
+void request_user()
 {
 	// TODO
 }
