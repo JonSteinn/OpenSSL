@@ -51,6 +51,7 @@ void exit_error(char *msg);
 void init_SSL();
 int init_server(int port);
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
+void free_client(struct client_data *client);
 void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
@@ -58,6 +59,7 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
 void add_client(int server_fd, SSL_CTX *ctx);
 void client_logger(struct client_data *client, int status);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
+void handle_who(SSL *ssl);
 
 int main(int argc, char **argv)
 {
@@ -128,6 +130,16 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 	if (_addr1->sin_port < _addr2->sin_port) return -1;
 	if (_addr1->sin_port > _addr2->sin_port) return 1;
 	return 0;
+}
+
+// TODO: Comment
+void free_client(struct client_data *client)
+{
+	close(client->fd);
+	SSL_shutdown(client->ssl);
+	SSL_free(client->ssl);
+	g_tree_remove(client_collection, &client->addr);
+	g_free(client);
 }
 
 /* Main loop of server */
@@ -264,20 +276,32 @@ void client_logger(struct client_data *client, int status)
 	fclose(tof);
 }
 
+// TODO: COMMENT
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data)
 {
 	UNUSED(key);
-	struct client_data * cl = value;
+	struct client_data *client = value;
 	char buff[512];
-	if(FD_ISSET(cl->fd, (fd_set *)data))
+	if (FD_ISSET(client->fd, (fd_set *)data))
 	{
-		if(SSL_read(cl->ssl, buff, sizeof(buff)-1) > 0 )
+		if (SSL_read(client->ssl, buff, sizeof(buff) - 1) > 0)
 		{
-			if((strncmp(buff, "/who",4)) == 0)
-			{
-				SSL_write(cl->ssl, "response to /who", strlen("response to /who"));
-			}
+			if (strncmp(buff, "/who", 4) == 0) handle_who(client->ssl);
+			else if (strncmp(buff, "/bye", 4) == 0) free_client(client);
+			// TODO: ADD more handling else-if-s and corresponding methods
+		}
+		else
+		{
+			free_client(client);
 		}
 	}
 	return FALSE;
+}
+
+// TODO: Comment
+void handle_who(SSL *ssl)
+{
+	// TODO: Replace by actual list of clients
+	// Needs to be done with a foreach loop through tree
+	SSL_write(ssl, "response to /who", strlen("response to /who"));
 }
