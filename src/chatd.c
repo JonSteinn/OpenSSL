@@ -19,8 +19,10 @@
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 
-#define CERTIFICATE "../encryption/fd.crt"
-#define PRIVATE_KEY "../encryption/fd.key"
+#define UNUSED(x) (void)(x)
+
+#define CERTIFICATE "encryption/fd.crt"
+#define PRIVATE_KEY "encryption/fd.key"
 
 #define MAX_QUEUED 2
 
@@ -38,6 +40,18 @@ void exit_error(char *msg);
 int init_server(int port);
 void client_logger(uint16_t port, char *ip, int status);
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
+void add_client(struct client_data *data, size_t size, GTree *collection);
+gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
+
+
+// TODO: remove
+gboolean func(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	UNUSED(data);
+	SSL_write(((struct client_data *)val)->ssl, "hello", strlen("hello"));
+	return FALSE;
+}
 
 int main(int argc, char **argv)
 {
@@ -54,30 +68,59 @@ int main(int argc, char **argv)
 
 	int server_fd = init_server(server_port);
 
-	// TODO: Data structures for rooms and clients
-	GTree* client_collection = g_tree_new(sockaddr_in_cmp);
-	
-
-	int client_fd;
-	struct sockaddr_in client;
+	GTree *client_collection = g_tree_new(sockaddr_in_cmp);
+		
 	while (1)
 	{
-		memset(&client, 0, sizeof(client));
-		socklen_t scklen = (socklen_t)sizeof(client);
-		if ((client_fd = accept(server_fd, (struct sockaddr *)&client, &scklen)) < 0) exit_error("accept");
-
-		char *client_ip = inet_ntoa(client.sin_addr);
-		uint16_t client_port = client.sin_port;
-		client_logger(client_port, client_ip, 1);
-
-		SSL *ssl;
-		if ((ssl = SSL_new(ctx)) == NULL) exit_error("SSL"); //TODO, dont exit
-		if (SSL_set_fd(ssl, client_fd) == 0) exit_error("SSL fd"); // TODO, don't exit
-		if (SSL_accept(ssl) < 0) exit_error("SSL accept"); //TODO, don't exit
-		if (SSL_write(ssl, "WELCOME", strlen("WELCOME")) < 0) exit_error("SSL write"); // TODO, don't exit
-
+		fd_set rfds;
+		FD_ZERO(&rfds);
+		FD_SET(server_fd, &rfds);
+		int max_fd;
+		g_tree_foreach(client_collection, get_max_fd, &max_fd);	
 		
-		close(client_fd);
+		struct timeval tv;
+		tv.tv_sec = 5;
+		tv.tv_usec = 0;
+
+		int r = select(max_fd + 1, &rfds, NULL, NULL, &tv);
+		if (r < 0)
+		{
+			if (errno == EINTR) continue;
+			perror("select()");
+			break;
+		}
+		if (r == 0)
+		{
+			fprintf(stdout, "nothing for 5s\n");
+			fflush(stdoud);
+		}
+		
+		if (FD_ISSET(server_fd, &rfds))
+		{
+
+			struct client_data client;
+			memset(&client, 0, sizeof(client));
+			socklen_t scklen = (socklen_t)sizeof(client.addr);
+			if ((client.fd = accept(server_fd, (struct sockaddr *)&client.addr, &scklen)) < 0) exit_error("accept");
+
+			// TODO: change parameter to data structure of client
+			char *client_ip = inet_ntoa(client.addr.sin_addr);
+			uint16_t client_port = client.addr.sin_port;
+			client_logger(client_port, client_ip, 1);
+
+			if ((client.ssl = SSL_new(ctx)) == NULL) exit_error("SSL"); //TODO, dont exit	
+			if (SSL_set_fd(client.ssl, client.fd) == 0) exit_error("SSL fd"); // TODO, don't exit
+			if (SSL_accept(client.ssl) < 0) exit_error("SSL accept"); //TODO, don't exit
+
+			add_client(&client, sizeof(client), client_collection);
+	
+			//if (SSL_write(client.ssl, "WELCOME", strlen("WELCOME")) < 0) exit_error("SSL write"); // TODO, don't exit
+
+			// TODO: ADD LOGGER HERE
+		}
+	
+		// TODO: read from client
+			
 	}
 
 	exit(EXIT_SUCCESS);
@@ -161,4 +204,19 @@ void client_logger(uint16_t port, char *ip, int status)
 
 		fflush(tof);
 		fclose(tof);
+}
+
+void add_client(struct client_data *data, size_t size, GTree *collection)
+{
+	struct client_data *cpy = (struct client_data *)malloc(size);
+	memcpy(cpy, data, size);
+	g_tree_insert(collection, &cpy->addr, cpy);
+}
+
+gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	int this_fd = ((struct client_data *)val)->fd;
+	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
+	return FALSE;
 }
