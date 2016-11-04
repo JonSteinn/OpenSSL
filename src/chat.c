@@ -37,7 +37,8 @@ int main(int argc, char **argv)
 	if (argc < 2) exit_error("args");
 	const int server_port = strtol(argv[1], NULL, 0);
 	server_fd = init_server_connection(server_port);
-	init_ssl();	
+
+	init_ssl();
 	prompt = strdup("> ");
 	rl_callback_handler_install(prompt, (rl_vcpfunc_t*) &readline_callback);
 	char buffer[512];
@@ -51,13 +52,13 @@ int main(int argc, char **argv)
 		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
 		int r = select(server_fd + 1, &rfds, NULL, NULL, &timeout);
-		if (r < 0) 
+		if (r < 0)
 		{
 			if (errno == EINTR) continue;
 			perror("select()");
 			break;
 		}
-		if (r == 0) 
+		if (r == 0)
 		{
 			write(STDOUT_FILENO, "No message?\n", 12);
 			fsync(STDOUT_FILENO);
@@ -74,7 +75,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 			else if (size == 0) continue; // <-------- check later
-			else 
+			else
 			{
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
@@ -114,27 +115,42 @@ void init_ssl()
 	if (SSL_connect(server_ssl) < 0) exit_error("SSL connect");
 }
 
-void readline_callback(char *line) 
+/* Handles the input from the client. The client can
+ * send up to 7 commands to the server. The available
+ * commands are:
+ * > /game: to play a mini-game
+ * > /join: to join a chatroom
+ * > /list: to list all available chatrooms
+ * > /roll: roll a dice in the mini-game
+ * > /say: 	sends a private message to a user
+ * > /user:	set a username
+ * > /who:	list all users in chatroom
+ *
+ * All commands are written to a buffer and sent securely
+ * to the server via SSL_write().
+ *
+ * Paramaters: user input */
+void readline_callback(char *line)
 {
 	char buffer[256];
-	if (NULL == line) 
+	if (NULL == line)
 	{
 		rl_callback_handler_remove();
 		return;
 	}
 
 	if (strlen(line) > 0) add_history(line);
-	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0)) 
+	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0))
 	{
 		rl_callback_handler_remove();
 		running = 0;
 		return;
 	}
-	if (strncmp("/game", line, 5) == 0) 
+	if (strncmp("/game", line, 5) == 0)
 	{
 		int i = 4;
 		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0') 
+		if (line[i] == '\0')
 		{
 			write(STDOUT_FILENO, "Usage: /game username\n", 29);
 			fsync(STDOUT_FILENO);
@@ -144,11 +160,11 @@ void readline_callback(char *line)
 		// TODO: Start game
 		return;
 	}
-	if (strncmp("/join", line, 5) == 0) 
+	if (strncmp("/join", line, 5) == 0)
 	{
 		int i = 5;
 		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0') 
+		if (line[i] == '\0')
 		{
 			write(STDOUT_FILENO, "Usage: /join chatroom\n", 22);
 			fsync(STDOUT_FILENO);
@@ -164,12 +180,12 @@ void readline_callback(char *line)
 		rl_set_prompt(prompt);
 		return;
 	}
-	if (strncmp("/list", line, 5) == 0) 
+	if (strncmp("/list", line, 5) == 0)
 	{
 		// TODO: Query all available chat rooms
 		return;
 	}
-	if (strncmp("/roll", line, 5) == 0) 
+	if (strncmp("/roll", line, 5) == 0)
 	{
 		// TODO: roll dice and declare winner.
 		return;
@@ -178,7 +194,7 @@ void readline_callback(char *line)
 	{
 		int i = 4;
 		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0') 
+		if (line[i] == '\0')
 		{
 			write(STDOUT_FILENO, "Usage: /say username message\n", 29);
 			fsync(STDOUT_FILENO);
@@ -187,7 +203,7 @@ void readline_callback(char *line)
 		}
 		int j = i + 1;
 		while (line[j] != '\0' && isgraph(line[j])) j++;
-		if (line[j] == '\0') 
+		if (line[j] == '\0')
 		{
 			write(STDOUT_FILENO, "Usage: /say username message\n", 29);
 			fsync(STDOUT_FILENO);
@@ -200,11 +216,11 @@ void readline_callback(char *line)
 		// TODO: Send private message to receiver.
 		return;
 	}
-	if (strncmp("/user", line, 5) == 0) 
+	if (strncmp("/user", line, 5) == 0)
 	{
 		int i = 5;
 		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0') 
+		if (line[i] == '\0')
 		{
 			write(STDOUT_FILENO, "Usage: /user username\n", 22);
 			fsync(STDOUT_FILENO);
@@ -223,9 +239,11 @@ void readline_callback(char *line)
 		rl_set_prompt(prompt);
 		return;
 	}
-	if (strncmp("/who", line, 4) == 0) 
+	if (strncmp("/who", line, 4) == 0)
 	{
-		// TODO Query all available users
+		// Write /who to the buffer and send it to the server
+		snprintf(buffer, strlen(buffer), "%s\n", line);
+		if(SSL_write(server_ssl, buffer, strlen(buffer)) == -1) printf("%s\n","Who error");
 		return;
 	}
 	snprintf(buffer, 255, "Message: %s\n", line);
