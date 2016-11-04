@@ -21,8 +21,8 @@
 
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "../encryption/fd.crt"
-#define PRIVATE_KEY "../encryption/fd.key"
+#define CERTIFICATE "encryption/fd.crt"
+#define PRIVATE_KEY "encryption/fd.key"
 
 #define MAX_QUEUED 5
 
@@ -54,6 +54,7 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2);
 void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
+gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
 void add_client(int server_fd, SSL_CTX *ctx);
 void client_logger(struct client_data *client, int status);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
@@ -62,6 +63,8 @@ int main(int argc, char **argv)
 {
 	if (argc < 2) exit_error("argument");
 	const int server_port = strtol(argv[1], NULL, 0);
+	fprintf(stdout, "Starting server on port %d\n", server_port);
+	fflush(stdout);	
 	init_SSL();
 	int server_fd = init_server(server_port);
 	client_collection = g_tree_new(sockaddr_in_cmp);
@@ -88,6 +91,8 @@ void init_SSL()
 	if (SSL_CTX_use_certificate_file(ctx, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
 	if (SSL_CTX_use_PrivateKey_file(ctx, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
 	if (SSL_CTX_check_private_key(ctx) != 1) exit_error("match");
+	fprintf(stdout, "Access granted\n"); 
+	fflush(stdout);
 }
 
 
@@ -101,16 +106,15 @@ int init_server(int port)
 {
 	int socket_fd;
 	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
-
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = htonl(INADDR_ANY);
 	server.sin_port = htons(port);
-
 	if (bind(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("bind");
 	if (listen(socket_fd, MAX_QUEUED) < 0) exit_error("listen");
-
+	fprintf(stdout, "Server setup complete\n");
+	fflush(stdout);
 	return socket_fd;
 }
 
@@ -157,8 +161,7 @@ int SELECT(fd_set *rfds, int server_fd)
 	FD_SET(server_fd, rfds);
 	int max_fd = server_fd;
 	g_tree_foreach(client_collection, get_max_fd, &max_fd);
-	// TODO, foreach for adding clients to FDSET
-	FD_SET(4, rfds); // TODO Delete
+	g_tree_foreach(client_collection, fd_set_all, rfds);
 	struct timeval tv;
 	tv.tv_sec = 10;
 	tv.tv_usec = 0;
@@ -175,6 +178,16 @@ gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
 	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
 	return FALSE;
 }
+
+/* Adds every current client's file descriptor to the
+ * pool of fd's that are checked for requests */
+gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	FD_SET(((struct client_data *)val)->fd, (fd_set *)data);
+	return FALSE;
+}
+
 
 /* Add client to server. Will be added to the tree and greeted
  * with a message.  */
@@ -205,6 +218,9 @@ void add_client(int server_fd, SSL_CTX *ctx)
 		perror("SSL accept");
 		return;
 	}
+	
+	fprintf(stdout, "New client! FD = %d\n", client.fd);
+	fflush(stdout);
 
 	struct client_data *cpy = (struct client_data *)malloc(client_size);
 	memcpy(cpy, &client, client_size);
@@ -250,8 +266,6 @@ void client_logger(struct client_data *client, int status)
 
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data)
 {
-
-	printf("A");
 	UNUSED(key);
 	struct client_data * cl = value;
 	char buff[512];
