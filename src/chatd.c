@@ -24,7 +24,7 @@
 #define CERTIFICATE "encryption/fd.crt"
 #define PRIVATE_KEY "encryption/fd.key"
 
-#define MAX_QUEUED 2
+#define MAX_QUEUED 5
 
 /*
  * Data structure for clients.
@@ -35,6 +35,10 @@ struct client_data
 	SSL *ssl;
 	struct sockaddr_in addr;
 };
+
+
+
+
 
 void exit_error(char *msg);
 int init_server(int port);
@@ -52,6 +56,14 @@ gboolean func(gpointer key, gpointer val, gpointer data)
 	SSL_write(((struct client_data *)val)->ssl, "hello", strlen("hello"));
 	return FALSE;
 }
+
+gboolean treeprinter(gpointer key, gpointer val, gpointer data)
+{
+	printf("CLIENT:");
+	printf("FD: %d\n", ((struct client_data *)val)->fd);
+	return FALSE;	
+}
+
 
 int main(int argc, char **argv)
 {
@@ -75,13 +87,14 @@ int main(int argc, char **argv)
 		fd_set rfds;
 		FD_ZERO(&rfds);
 		FD_SET(server_fd, &rfds);
-		int max_fd;
+		int max_fd = server_fd;
 		g_tree_foreach(client_collection, get_max_fd, &max_fd);	
 		
 		struct timeval tv;
-		tv.tv_sec = 5;
+		tv.tv_sec = 30;
 		tv.tv_usec = 0;
 
+		printf("max_fd = %d\n", max_fd);  // <------------------------------------------ HENDA
 		int r = select(max_fd + 1, &rfds, NULL, NULL, &tv);
 		if (r < 0)
 		{
@@ -92,12 +105,12 @@ int main(int argc, char **argv)
 		if (r == 0)
 		{
 			fprintf(stdout, "nothing for 5s\n");
-			fflush(stdoud);
+			fflush(stdout);
 		}
 		
 		if (FD_ISSET(server_fd, &rfds))
 		{
-
+			printf("a client calling...");
 			struct client_data client;
 			memset(&client, 0, sizeof(client));
 			socklen_t scklen = (socklen_t)sizeof(client.addr);
@@ -108,19 +121,23 @@ int main(int argc, char **argv)
 			uint16_t client_port = client.addr.sin_port;
 			client_logger(client_port, client_ip, 1);
 
-			if ((client.ssl = SSL_new(ctx)) == NULL) exit_error("SSL"); //TODO, dont exit	
-			if (SSL_set_fd(client.ssl, client.fd) == 0) exit_error("SSL fd"); // TODO, don't exit
-			if (SSL_accept(client.ssl) < 0) exit_error("SSL accept"); //TODO, don't exit
+			if ((client.ssl = SSL_new(ctx)) == NULL) exit_error("SSL");	
+			if (SSL_set_fd(client.ssl, client.fd) == 0) exit_error("SSL fd");
+			if (SSL_accept(client.ssl) < 0) exit_error("SSL accept");
 
 			add_client(&client, sizeof(client), client_collection);
-	
-			//if (SSL_write(client.ssl, "WELCOME", strlen("WELCOME")) < 0) exit_error("SSL write"); // TODO, don't exit
+
+			if (SSL_write(client.ssl, "WELCOME", strlen("WELCOME")) < 0) exit_error("SSL write");
 
 			// TODO: ADD LOGGER HERE
 		}
 	
-		// TODO: read from client
-			
+		//////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////
+		// TODO: read from client <------///////////////////////
+		// //////////////////////////////////////////////////////
+		// /////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////
 	}
 
 	exit(EXIT_SUCCESS);
@@ -160,7 +177,6 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 {
 	const struct sockaddr_in *_addr1 = addr1;
 	const struct sockaddr_in *_addr2 = addr2;
-	g_assert(_addr1 == NULL || _addr2 == NULL || _addr1->sin_family != _addr2->sin_family);
 	if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) return -1;
 	if (_addr1->sin_addr.s_addr > _addr2->sin_addr.s_addr) return 1;
 	if (_addr1->sin_port < _addr2->sin_port) return -1;
