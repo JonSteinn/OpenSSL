@@ -121,6 +121,7 @@ void client_loop()
 			write(STDOUT_FILENO, "No message?\n", 12);
 			fsync(STDOUT_FILENO);
 			rl_redisplay();
+			write (STDOUT_FILENO, prompt, strlen(prompt));
 			continue;
 		}
 		// If standard input is ready to talk
@@ -141,6 +142,7 @@ void client_loop()
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
 				fflush(stdout);
+				write (STDOUT_FILENO, prompt, strlen(prompt));
 			}
 		}
 	}
@@ -189,6 +191,7 @@ void readline_callback(char *line)
 
 void request_quit()
 {
+	if(SSL_write(server_ssl, "/bye", strlen("/bye")) == -1) perror("/bye");
 	rl_callback_handler_remove();
 	running = 0;
 }
@@ -217,10 +220,8 @@ void request_user()
 	// TODO
 }
 /* Write /who to the buffer and send it to the server */
-void request_who(char *str)
+void request_who()
 {
-	char buffer[512];
-	snprintf(buffer, strlen(buffer), "%s\n", str);
 	if(SSL_write(server_ssl, "/who", strlen("/who")) == -1) perror("/who");
 }
 
