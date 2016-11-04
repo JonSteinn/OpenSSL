@@ -21,8 +21,8 @@
 
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "encryption/fd.crt"
-#define PRIVATE_KEY "encryption/fd.key"
+#define CERTIFICATE "../encryption/fd.crt"
+#define PRIVATE_KEY "../encryption/fd.key"
 
 #define MAX_QUEUED 5
 
@@ -46,6 +46,7 @@ void client_logger(uint16_t port, char *ip, int status);
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
 void add_client(struct client_data *data, size_t size, GTree *collection);
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
+gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 
 
 // TODO: remove
@@ -61,7 +62,7 @@ gboolean treeprinter(gpointer key, gpointer val, gpointer data)
 {
 	printf("CLIENT:");
 	printf("FD: %d\n", ((struct client_data *)val)->fd);
-	return FALSE;	
+	return FALSE;
 }
 
 
@@ -81,15 +82,15 @@ int main(int argc, char **argv)
 	int server_fd = init_server(server_port);
 
 	GTree *client_collection = g_tree_new(sockaddr_in_cmp);
-		
+
 	while (1)
 	{
 		fd_set rfds;
 		FD_ZERO(&rfds);
 		FD_SET(server_fd, &rfds);
 		int max_fd = server_fd;
-		g_tree_foreach(client_collection, get_max_fd, &max_fd);	
-		
+		g_tree_foreach(client_collection, get_max_fd, &max_fd);
+
 		struct timeval tv;
 		tv.tv_sec = 30;
 		tv.tv_usec = 0;
@@ -107,7 +108,7 @@ int main(int argc, char **argv)
 			fprintf(stdout, "nothing for 5s\n");
 			fflush(stdout);
 		}
-		
+
 		if (FD_ISSET(server_fd, &rfds))
 		{
 			printf("a client calling...");
@@ -115,13 +116,14 @@ int main(int argc, char **argv)
 			memset(&client, 0, sizeof(client));
 			socklen_t scklen = (socklen_t)sizeof(client.addr);
 			if ((client.fd = accept(server_fd, (struct sockaddr *)&client.addr, &scklen)) < 0) exit_error("accept");
+			FD_SET(client.fd, &rfds);
 
 			// TODO: change parameter to data structure of client
 			char *client_ip = inet_ntoa(client.addr.sin_addr);
 			uint16_t client_port = client.addr.sin_port;
 			client_logger(client_port, client_ip, 1);
 
-			if ((client.ssl = SSL_new(ctx)) == NULL) exit_error("SSL");	
+			if ((client.ssl = SSL_new(ctx)) == NULL) exit_error("SSL");
 			if (SSL_set_fd(client.ssl, client.fd) == 0) exit_error("SSL fd");
 			if (SSL_accept(client.ssl) < 0) exit_error("SSL accept");
 
@@ -131,11 +133,11 @@ int main(int argc, char **argv)
 
 			// TODO: ADD LOGGER HERE
 		}
-	
+
 		//////////////////////////////////////////////////////////
 		/////////////////////////////////////////////////////////
 		// TODO: read from client <------///////////////////////
-		// //////////////////////////////////////////////////////
+		g_tree_foreach(client_collection, responde_to_client, &rfds);
 		// /////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////
 	}
@@ -234,5 +236,36 @@ gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
 	UNUSED(key);
 	int this_fd = ((struct client_data *)val)->fd;
 	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
+	return FALSE;
+}
+
+gboolean responde_to_client(gpointer key, gpointer value, gpointer data)
+{
+	fprintf(stdout, "%s\n","responding..." );
+	fflush(stdout);
+	// value == client_data
+	// key == address
+	UNUSED(key);
+
+	struct client_data * cl = value;
+	char buff[512];
+	fprintf(stdout, "%d\n",cl->fd );
+	fflush(stdout);
+	if(FD_ISSET(cl->fd, (fd_set *)data))
+	{
+		fprintf(stdout, "%s\n","In set..." );
+		fflush(stdout);
+		if(SSL_read(cl->ssl, buff, sizeof(buff)-1) > 0 )
+		{
+			fprintf(stdout, "%s\n","Reading successful..." );
+			fflush(stdout);
+			if((strncmp(buff, "/who",4)) == 0)
+			{
+				fprintf(stdout, "%s\n","Writing to client..." );
+				fflush(stdout);
+				SSL_write(cl->ssl, "response to /who", strlen("response to /who"));
+			}
+		}
+	}
 	return FALSE;
 }

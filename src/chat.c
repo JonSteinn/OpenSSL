@@ -27,21 +27,77 @@ static int running = 1;
 void exit_error(char *msg);
 int init_server_connection(int port);
 void init_ssl();
-void getpasswd(const char *prompt, char *passwd, size_t size);
 void close_connection();
+void client_loop();
 void readline_callback(char *line);
-
+void request_quit();
+void request_game(char *str);
+void request_join(char *str);
+void request_list(char *str);
+void request_roll(char *str);
+void request_say(char *str);
+void request_user(char *str);
+void request_who();
+void getpasswd(const char *prompt, char *passwd, size_t size);
 
 int main(int argc, char **argv)
 {
 	if (argc < 2) exit_error("args");
 	const int server_port = strtol(argv[1], NULL, 0);
 	server_fd = init_server_connection(server_port);
-
 	init_ssl();
 	prompt = strdup("> ");
 	rl_callback_handler_install(prompt, (rl_vcpfunc_t*) &readline_callback);
-	char buffer[512];
+	client_loop();
+	close_connection();
+}
+
+/* Prints error message and erminates process */
+void exit_error(char *msg)
+{
+	perror(msg);
+	exit(EXIT_FAILURE);
+}
+
+/* Initialization of sockets. All error leads to termination.
+ * Return value: file descriptor (int) */
+int init_server_connection(int port)
+{
+	int socket_fd;
+	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
+	struct sockaddr_in server;
+	memset(&server, 0, sizeof(server));
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server.sin_port = htons(port);
+	if (connect(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("connect");
+	return socket_fd;
+}
+
+/* SSL initialization and assigns value to ssl_ctx
+ * and server_ssl, both static. All errors lead to
+ * termination of program. */
+void init_ssl()
+{
+	SSL_library_init();
+	SSL_load_error_strings();
+	if ((ssl_ctx = SSL_CTX_new(TLSv1_client_method())) == NULL) exit_error("ssl ctx");
+	server_ssl = SSL_new(ssl_ctx);
+	SSL_set_fd(server_ssl, server_fd);
+	if (SSL_connect(server_ssl) < 0) exit_error("SSL connect");
+}
+
+/* Clean socket and ssl resources */
+void close_connection()
+{
+	SSL_shutdown(server_ssl);
+	SSL_free(server_ssl);
+	SSL_CTX_free(ssl_ctx);
+	close(server_fd);
+}
+
+void client_loop()
+{
 	while (running)
 	{
 		fd_set rfds;
@@ -65,16 +121,19 @@ int main(int argc, char **argv)
 			rl_redisplay();
 			continue;
 		}
+		// If standard input is ready to talk
 		if (FD_ISSET(STDIN_FILENO, &rfds)) rl_callback_read_char();
+		// If server is ready to talk
 		if (FD_ISSET(server_fd, &rfds))
 		{
+			char buffer[512];
 			int size;
 			if ((size = SSL_read(server_ssl, buffer, 512)) < 0)
 			{
 				perror("Error receiving message\n");
-				continue;
+				break;
 			}
-			else if (size == 0) continue; // <-------- check later
+			else if (size == 0) continue; // <--------- double check later
 			else
 			{
 				buffer[size] = '\0';
@@ -83,36 +142,6 @@ int main(int argc, char **argv)
 			}
 		}
 	}
-	void close_connection();
-}
-
-void exit_error(char *msg)
-{
-	perror(msg);
-	exit(EXIT_FAILURE);
-}
-
-int init_server_connection(int port)
-{
-	int socket_fd;
-	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
-	struct sockaddr_in server;
-	memset(&server, 0, sizeof(server));
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = inet_addr("127.0.0.1");
-	server.sin_port = htons(port);
-	if (connect(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("connect");
-	return socket_fd;
-}
-
-void init_ssl()
-{
-	SSL_library_init();
-	SSL_load_error_strings();
-	if ((ssl_ctx = SSL_CTX_new(TLSv1_client_method())) == NULL) exit_error("ssl ctx");
-	server_ssl = SSL_new(ssl_ctx);
-	SSL_set_fd(server_ssl, server_fd);
-	if (SSL_connect(server_ssl) < 0) exit_error("SSL connect");
 }
 
 /* Handles the input from the client. The client can
@@ -138,127 +167,62 @@ void readline_callback(char *line)
 		rl_callback_handler_remove();
 		return;
 	}
-
 	if (strlen(line) > 0) add_history(line);
-	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0))
-	{
-		rl_callback_handler_remove();
-		running = 0;
-		return;
-	}
-	if (strncmp("/game", line, 5) == 0)
-	{
-		int i = 4;
-		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0')
-		{
-			write(STDOUT_FILENO, "Usage: /game username\n", 29);
-			fsync(STDOUT_FILENO);
-			rl_redisplay();
-			return;
-		}
-		// TODO: Start game
-		return;
-	}
-	if (strncmp("/join", line, 5) == 0)
-	{
-		int i = 5;
-		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0')
-		{
-			write(STDOUT_FILENO, "Usage: /join chatroom\n", 22);
-			fsync(STDOUT_FILENO);
-			rl_redisplay();
-			return;
-		}
-		// char *chatroom = strdup(&(line[i]));
-		// TODO:
-		// Process and send this information to the server.
-		// Maybe update the prompt.
-		free(prompt);
-		prompt = NULL; // What should the new prompt look like?
-		rl_set_prompt(prompt);
-		return;
-	}
-	if (strncmp("/list", line, 5) == 0)
-	{
-		// TODO: Query all available chat rooms
-		return;
-	}
-	if (strncmp("/roll", line, 5) == 0)
-	{
-		// TODO: roll dice and declare winner.
-		return;
-	}
-	if (strncmp("/say", line, 4) == 0)
-	{
-		int i = 4;
-		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0')
-		{
-			write(STDOUT_FILENO, "Usage: /say username message\n", 29);
-			fsync(STDOUT_FILENO);
-			rl_redisplay();
-			return;
-		}
-		int j = i + 1;
-		while (line[j] != '\0' && isgraph(line[j])) j++;
-		if (line[j] == '\0')
-		{
-			write(STDOUT_FILENO, "Usage: /say username message\n", 29);
-			fsync(STDOUT_FILENO);
-			rl_redisplay();
-			return;
-		}
-		//char *receiver = strndup(&(line[i]), j - i - 1);
-		//char *message = strndup(&(line[j]), j - i - 1);
 
-		// TODO: Send private message to receiver.
-		return;
-	}
-	if (strncmp("/user", line, 5) == 0)
+	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0)) request_quit();
+	else if (strncmp("/game", line, 5) == 0) request_game(line);
+	else if (strncmp("/join", line, 5) == 0) request_join(line);
+	else if (strncmp("/list", line, 5) == 0) request_list(line);
+	else if (strncmp("/roll", line, 5) == 0) request_roll(line);
+	else if (strncmp("/say", line, 4) == 0) request_say(line);
+	else if (strncmp("/user", line, 5) == 0) request_user(line);
+	else if (strncmp("/who", line, 4) == 0) request_who();
+	else
 	{
-		int i = 5;
-		while (line[i] != '\0' && isspace(line[i])) i++;
-		if (line[i] == '\0')
-		{
-			write(STDOUT_FILENO, "Usage: /user username\n", 22);
-			fsync(STDOUT_FILENO);
-			rl_redisplay();
-			return;
-		}
-		//char *new_user = strdup(&(line[i]));
-		char passwd[48];
-		getpasswd("Password: ", passwd, 48);
-
-		// TODO Process and send this information to the server.
-
-		// Maybe update the prompt
-		free(prompt);
-		prompt = NULL; // What should the new prompt look like?
-		rl_set_prompt(prompt);
-		return;
+		snprintf(buffer, 255, "Message: %s\n", line);
+		write(STDOUT_FILENO, buffer, strlen(buffer));
+		fsync(STDOUT_FILENO);
 	}
-	if (strncmp("/who", line, 4) == 0)
-	{
-		// Write /who to the buffer and send it to the server
-		snprintf(buffer, strlen(buffer), "%s\n", line);
-		if(SSL_write(server_ssl, buffer, strlen(buffer)) == -1) printf("%s\n","Who error");
-		return;
-	}
-	snprintf(buffer, 255, "Message: %s\n", line);
-	write(STDOUT_FILENO, buffer, strlen(buffer));
-	fsync(STDOUT_FILENO);
 }
 
-void close_connection()
+void request_quit()
 {
-	SSL_shutdown(server_ssl);
-	SSL_free(server_ssl);
-	SSL_CTX_free(ssl_ctx);
-	close(server_fd);
+	rl_callback_handler_remove();
+	running = 0;
+}
+void request_game(char *str)
+{
+	// TODO
+}
+void request_join(char *str)
+{
+	// TODO
+}
+void request_list(char *str)
+{
+	// TODO
+}
+void request_roll(char *str)
+{
+	// TODO
+}
+void request_say(char *str)
+{
+	// TODO
+}
+void request_user(char *str)
+{
+	// TODO
+}
+/* Write /who to the buffer and send it to the server */
+void request_who(char *str)
+{
+	char buffer[512];
+	snprintf(buffer, strlen(buffer), "%s\n", str);
+	if(SSL_write(server_ssl, "/who", strlen("/who")) == -1) perror("/who");
 }
 
+/* For typing password without showing it on stdout */
 void getpasswd(const char *prompt, char *passwd, size_t size)
 {
 	struct termios old_flags, new_flags;
