@@ -21,8 +21,8 @@
 
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "../encryption/fd.crt"
-#define PRIVATE_KEY "../encryption/fd.key"
+#define CERTIFICATE "encryption/fd.crt"
+#define PRIVATE_KEY "encryption/fd.key"
 
 #define MAX_QUEUED 5
 
