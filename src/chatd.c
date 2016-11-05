@@ -75,7 +75,7 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2);
 int chat_cmp(const void *name1, const void *name2);
 
 // ADDING
-void add_room(char *nane);
+void add_room(char *name);
 void add_client(int server_fd, SSL_CTX *ctx);
 
 // MISC
@@ -92,6 +92,7 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
 gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data);
 gboolean remove_from_room(gpointer key, gpointer val, gpointer data);
+int find_chat_room();
 
 // HANDLERS
 void handle_who(SSL *ssl);
@@ -422,12 +423,30 @@ gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
 void handle_join(struct client_data *client, char *buffer)
 {
 	fprintf(stdout, "%s\n",buffer);
-	char *room_name = g_strchomp(&buffer[5]);
+	char *room_name = g_strchomp(&buffer[6]);
 	client->room = g_strndup(room_name, strlen(room_name));
+	GTree *tree;
+	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL)
+	{
+		add_room(client->room);
+	}
 	g_tree_foreach(room_collection, remove_from_room, client);
 	g_tree_foreach(room_collection, add_to_chat_room, client);
 }
 
+//TODO: COMMENT
+int find_chat_room(const void *name1, const void *name2)
+{
+		const char *first = name1;
+		const char *second = name2;
+		int x = chat_cmp(first, second);
+		if (x > 0) return -1;
+		if (x < 0) return 1;
+		return 0;
+}
+
+
+// TODO: COMMENT
 gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data)
 {
 	UNUSED(key);
@@ -441,7 +460,7 @@ gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data)
 }
 
 
-// TODO COMMENT
+// TODO: COMMENT
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 {
 	// TODO: comment steps
