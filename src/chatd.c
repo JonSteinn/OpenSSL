@@ -21,8 +21,8 @@
 
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "encryption/fd.crt"
-#define PRIVATE_KEY "encryption/fd.key"
+#define CERTIFICATE "../encryption/fd.crt"
+#define PRIVATE_KEY "../encryption/fd.key"
 
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
@@ -333,7 +333,7 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	char *ip = inet_ntoa(client->addr.sin_addr);
 	gchar * port = g_strdup_printf(":%i ", client->addr.sin_port);
 
-	buffer = g_string_append(buffer, "Name: \n");
+	buffer = g_string_append(buffer, "\nName: \n");
 	// TODO Write name(nickname) to the buffer
 	buffer = g_string_append(buffer, "Chatroom: ");
 	/* TODO Check if a user belongs to any chatroom/s
@@ -345,7 +345,7 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	buffer = g_string_append(buffer, "\n");
 	buffer = g_string_append(buffer, "Port: ");
 	buffer = g_string_append(buffer, port);
-	buffer = g_string_append(buffer, "\n\n");
+	buffer = g_string_append(buffer, "\n");
 
 	return FALSE;
 }
