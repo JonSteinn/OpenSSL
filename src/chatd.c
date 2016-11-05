@@ -29,6 +29,8 @@
 
 #define MAX_QUEUED 5
 
+#define INIT_CHANNEL "LOBBY"
+
 /*
  * Data structure for clients.
  * 1 fd = File descriptor
@@ -148,7 +150,7 @@ int init_server(int port)
 void init_chat_rooms()
 {
 	room_collection = g_tree_new(chat_cmp);
-	add_room("Lobby");
+	add_room(INIT_CHANNEL);
 }
 
 void add_room(char *name)
@@ -260,50 +262,38 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
  * with a message.  */
 void add_client(int server_fd, SSL_CTX *ctx)
 {
-	// TODO: comment steps
-	
-	// TODO: Do we really need this struct, just to copy it later?
-	// Can we just use the on? with malloc and sizof?, that is:
-	//
-	// struct client_data *client = (struct client_data *)mallioc(sizeof(client_data));
-	// client->x =  ...
-	// client->y = 
-	// ...
-	
-	struct client_data client;
-	size_t client_size = sizeof(client);
-	memset(&client, 0, client_size);
-	socklen_t scklen = (socklen_t)sizeof(client.addr);
+	// TODO: comment steps	
+	struct client_data *client = g_new0(struct client_data, 1);
+	socklen_t scklen = (socklen_t)sizeof(client->addr);
 
-	if ((client.fd = accept(server_fd, (struct sockaddr *)&client.addr, &scklen)) < 0)
+	if ((client->fd = accept(server_fd, (struct sockaddr *)&client->addr, &scklen)) < 0)
 	{
 		perror("accept");
 		return;
 	}
-	if ((client.ssl = SSL_new(ctx)) == NULL)
+	if ((client->ssl = SSL_new(ctx)) == NULL)
 	{
 		perror("SSL");
 		return;
 	}
-	if (SSL_set_fd(client.ssl, client.fd) == 0)
+	if (SSL_set_fd(client->ssl, client->fd) == 0)
 	{
 		perror("SSL fd");
 		return;
 	}
-	if (SSL_accept(client.ssl) < 0)
+	if (SSL_accept(client->ssl) < 0)
 	{
 		perror("SSL accept");
 		return;
 	}
 
-	fprintf(stdout, "New client! FD = %d\n", client.fd);
+	fprintf(stdout, "New client! FD = %d\n", client->fd);
 	fflush(stdout);
 
-	struct client_data *cpy = (struct client_data *)malloc(client_size);
-	memcpy(cpy, &client, client_size);
-	g_tree_insert(client_collection, &cpy->addr, cpy);
-	if (SSL_write(client.ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
-	client_logger(&client, LOG_CONNECTED);
+	client->room = g_strdup(INIT_CHANNEL);
+	g_tree_insert(client_collection, &client->addr, client);
+	if (SSL_write(client->ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
+	client_logger(client, LOG_CONNECTED);
 }
 
 /* Time stamp on client action, in local file system */
