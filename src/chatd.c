@@ -313,9 +313,10 @@ void add_client(int server_fd, SSL_CTX *ctx)
 	g_tree_insert(client_collection, &client->addr, client);
 	GTree *tree = g_tree_search(room_collection, find_chat_room, "LOBBY");
 	g_tree_insert(tree, &client->addr, client);
-	client->room = "LOBBY";
+	//client->room = "LOBBY";
 	if (SSL_write(client->ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
 	client_logger(client, LOG_CONNECTED);
+
 }
 
 /* Time stamp on client action, in local file system */
@@ -373,18 +374,9 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
 			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
 			// TODO: ADD more handling else-if-s and corresponding methods
-			else
-			{
-				//fprintf(stdout, "%s\n","Sending to all" );
-				//send_to_all(client, buff);
-				GTree *tree = g_tree_search(room_collection, find_chat_room, client->room);
-				g_tree_foreach(tree, send_to_room, buff);
-			}
+			else g_tree_foreach(g_tree_search(room_collection, find_chat_room, client->room), send_to_room, buff);
 		}
-		else
-		{
-			free_client(client);
-		}
+		else free_client(client);
 	}
 	return FALSE;
 }
@@ -402,9 +394,9 @@ void handle_who(SSL *ssl)
 // TODO: COMMENT:
 void handle_list(SSL *ssl)
 {
-	GString * buffer = g_string_new(NULL);
-	GString * message = g_string_new("\n\nList of chatrooms:");
-
+	GString *buffer = g_string_new(NULL);
+	GString *message = g_string_new("\n\nList of chatrooms:");
+	fprintf(stdout, "%d\n", g_tree_nnodes(room_collection));
 	g_tree_foreach(room_collection, send_chat_rooms, buffer);
 	message = g_string_append (message, buffer->str);
 	message = g_string_append (message, "\n");
@@ -416,11 +408,10 @@ void handle_list(SSL *ssl)
 // TODO Comment
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
 {
-	UNUSED(key);
-	const struct room_data * room = val;
-	GString * buffer = data;
+	UNUSED(val);
+	GString *buffer = data;
 	buffer = g_string_append(buffer, "\n");
-	buffer = g_string_append(buffer, room->name);
+	buffer = g_string_append(buffer, (char *)key);
 
 	return FALSE;
 }
@@ -429,16 +420,11 @@ gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
 void handle_join(struct client_data *client, char *buffer)
 {
 	char *room_name = g_strchomp(&buffer[6]);
-	fprintf(stdout, "%s\n",room_name);
-	fprintf(stdout, "%s\n",client->room );
-	fflush(stdout);
 	GTree *tree;
 
 	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL)
 	{
 		add_room(room_name);
-		fprintf(stdout, "%s\n","Room added");
-		fflush(stdout);
 	}
 		tree = g_tree_search(room_collection, find_chat_room, client->room);
 
@@ -452,17 +438,9 @@ void handle_join(struct client_data *client, char *buffer)
 		{
 			fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
 		}
-		else
-		{
-			fprintf(stdout, "%s%d%s\n","Removed ", client->fd, " from tree");
-			fflush(stdout);
-		}
 
 		tree = g_tree_search(room_collection, find_chat_room, room_name);
-		fprintf(stdout, "%s\n", "Inserting into tree");
-		fflush(stdout);
 		g_tree_insert (tree, &client->addr, client);
-		fprintf(stdout, "%s%s%s%s\n", "Inserted...\n Moved from: ", client->room, " into :", room_name);
 		client->room = strdup(room_name);
 }
 
