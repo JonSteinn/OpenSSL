@@ -21,8 +21,8 @@
 
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "../encryption/fd.crt"
-#define PRIVATE_KEY "../encryption/fd.key"
+#define CERTIFICATE "encryption/fd.crt"
+#define PRIVATE_KEY "encryption/fd.key"
 
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
@@ -63,7 +63,10 @@ static SSL_CTX *ctx;
 void exit_error(char *msg);
 void init_SSL();
 int init_server(int port);
+void init_chat_rooms();
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
+int chat_cmp(const void *name1, const void *name2);
+void add_room(char *nane);
 void free_client(struct client_data *client);
 void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
@@ -86,7 +89,7 @@ int main(int argc, char **argv)
 	init_SSL();
 	int server_fd = init_server(server_port);
 	client_collection = g_tree_new(sockaddr_in_cmp);
-	
+	init_chat_rooms();
 	server_loop(server_fd);
 	exit(EXIT_SUCCESS);
 }
@@ -141,6 +144,22 @@ int init_server(int port)
 	return socket_fd;
 }
 
+//TODO:comment
+void init_chat_rooms()
+{
+	room_collection = g_tree_new(chat_cmp);
+	add_room("Lobby");
+}
+
+void add_room(char *name)
+{
+	struct room_data tmp;
+	struct room_data *newChat = (struct room_data *)malloc(sizeof(tmp));
+	newChat->name = g_strdup(name);
+	newChat->members = g_tree_new(sockaddr_in_cmp);
+}
+
+
 /* Comparator for sockaddr to keep tree balanced */
 int sockaddr_in_cmp(const void *addr1, const void *addr2)
 {
@@ -153,6 +172,13 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 	if (_addr1->sin_port < _addr2->sin_port) return -1;
 	if (_addr1->sin_port > _addr2->sin_port) return 1;
 	return 0;
+}
+
+// Compare function for chat tree (since for some reason
+// it did not accept g_strcmp0 as an argument)
+int chat_cmp(const void *name1, const void *name2)
+{
+	return g_strcmp0(name1, name2);
 }
 
 // TODO: Comment
@@ -235,6 +261,14 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
 void add_client(int server_fd, SSL_CTX *ctx)
 {
 	// TODO: comment steps
+	
+	// TODO: Do we really need this struct, just to copy it later?
+	// Can we just use the on? with malloc and sizof?, that is:
+	//
+	// struct client_data *client = (struct client_data *)mallioc(sizeof(client_data));
+	// client->x =  ...
+	// client->y = 
+	// ...
 	
 	struct client_data client;
 	size_t client_size = sizeof(client);
