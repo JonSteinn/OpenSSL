@@ -26,6 +26,7 @@ static SSL_CTX *ssl_ctx;
 static char *prompt;
 static int running = 1;
 
+void signal_handler(int signum); 
 void exit_error(char *msg);
 int init_server_connection(int port);
 void init_ssl();
@@ -44,6 +45,7 @@ void getpasswd(const char *prompt, char *passwd, size_t size);
 
 int main(int argc, char **argv)
 {
+	signal(SIGINT, signal_handler);
 	if (argc < 2) exit_error("args");
 	const int server_port = strtol(argv[1], NULL, 0);
 	server_fd = init_server_connection(server_port);
@@ -52,6 +54,15 @@ int main(int argc, char **argv)
 	rl_callback_handler_install(prompt, (rl_vcpfunc_t*) &readline_callback);
 	client_loop();
 	close_connection();
+	return 0;
+}
+
+void signal_handler(int signum)
+{
+	UNUSED(signum);
+	running = 0;
+	write(STDOUT_FILENO, "Terminated.\n", 12);
+	fsync(STDOUT_FILENO);
 }
 
 /* Prints error message and erminates process */
@@ -70,7 +81,7 @@ int init_server_connection(int port)
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server.sin_addr.s_addr = inet_addr("127.0.0.1"); // TODO: Add to arguements/define ?
 	server.sin_port = htons(port);
 	if (connect(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("connect");
 	return socket_fd;
@@ -92,6 +103,7 @@ void init_ssl()
 /* Clean socket and ssl resources */
 void close_connection()
 {
+	if(SSL_write(server_ssl, "/bye", strlen("/bye")) == -1) perror("/bye");
 	SSL_shutdown(server_ssl);
 	SSL_free(server_ssl);
 	SSL_CTX_free(ssl_ctx);
@@ -191,7 +203,6 @@ void readline_callback(char *line)
 
 void request_quit()
 {
-	if(SSL_write(server_ssl, "/bye", strlen("/bye")) == -1) perror("/bye");
 	rl_callback_handler_remove();
 	running = 0;
 }
