@@ -177,7 +177,7 @@ void add_room(char *name)
 	struct room_data *newChat = g_new0(struct room_data, 1);
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
-	g_tree_insert (room_collection, newChat->name, newChat);
+	g_tree_insert (room_collection, newChat->name, newChat->members);
 }
 
 
@@ -378,7 +378,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 	return FALSE;
 }
 
-// TODO: Comment
+// TODO: COMMENT
 void handle_who(SSL *ssl)
 {
 	if(SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
@@ -399,15 +399,11 @@ void handle_list(SSL *ssl)
 	g_string_free(buffer, TRUE);
 }
 
+// TODO: COMMENT
 void handle_join(struct client_data *client, char *buffer)
 {
-	char room[512];
-	fprintf(stdout, "%s\n","Before strncpy: ");
-	fprintf(stdout, "%s\n",buffer );
-	strncpy(room, buffer +6, strlen(buffer) -6);
-	fprintf(stdout, "%s\n","After strncpy: ");
-	fprintf(stdout, "%s\n",room );
-	client->room = strdup(room);
+	char *room_name = g_strchomp(&buffer[6]);
+	client->room = g_strndup(room_name, strlen(room_name));
 	g_tree_foreach(room_collection, find_chat_room, client);
 }
 
@@ -418,7 +414,7 @@ gboolean find_chat_room(gpointer key, gpointer val, gpointer data)
 	struct client_data * client = data;
 	if (room->name == client->room)
 	{
-		g_tree_insert (room_collection, room->name, data);
+		g_tree_insert (room->members, client->name, client->name);
 	}
 	return FALSE;
 }

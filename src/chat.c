@@ -149,20 +149,18 @@ void client_loop()
 				break;
 			}
 			else if (size == 0) continue; // <--------- double check later
-			if(strlen(buffer) > 0)
+			else
 			{
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
 				fflush(stdout);
-				if (strlen(buffer == 0))
-				{
-					write (STDOUT_FILENO, prompt, strlen(prompt));
-					fsync(STDOUT_FILENO);/
-				}
+				write (STDOUT_FILENO, prompt, strlen(prompt));
+				fsync(STDOUT_FILENO);
 			}
 		}
 	}
 }
+
 
 /* Handles the input from the client. The client can
  * send up to 7 commands to the server. The available
