@@ -90,7 +90,8 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
-gboolean find_chat_room(gpointer key, gpointer val, gpointer data);
+gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data);
+gboolean remove_from_room(gpointer key, gpointer val, gpointer data);
 
 // HANDLERS
 void handle_who(SSL *ssl);
@@ -360,6 +361,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 	UNUSED(key);
 	struct client_data *client = val;
 	char buff[512];
+	memset(buff,0, sizeof(buff));
 	if (FD_ISSET(client->fd, (fd_set *)data))
 	{
 		if (SSL_read(client->ssl, buff, sizeof(buff) - 1) > 0)
@@ -419,14 +421,14 @@ gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
 // TODO: COMMENT
 void handle_join(struct client_data *client, char *buffer)
 {
-	int i = 5;
-	while (buffer[i] != '\0' && isspace(buffer[i])) { i++; }
-	char *room_name = g_strchomp(&buffer[i]);
+	fprintf(stdout, "%s\n",buffer);
+	char *room_name = g_strchomp(&buffer[5]);
 	client->room = g_strndup(room_name, strlen(room_name));
-	g_tree_foreach(room_collection, find_chat_room, client);
+	g_tree_foreach(room_collection, remove_from_room, client);
+	g_tree_foreach(room_collection, add_to_chat_room, client);
 }
 
-gboolean find_chat_room(gpointer key, gpointer val, gpointer data)
+gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data)
 {
 	UNUSED(key);
 	struct room_data * room = val;
@@ -472,5 +474,18 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	buffer = g_string_append(buffer, "\n");
 
 	g_free(port);
+	return FALSE;
+}
+
+// TODO: COMMENT
+gboolean remove_from_room(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	struct room_data * room = val;
+	struct client_data * client = data;
+	if (room->name == client->room)
+	{
+		g_tree_remove (room->members, &client->addr);
+	}
 	return FALSE;
 }
