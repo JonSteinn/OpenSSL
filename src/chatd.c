@@ -24,6 +24,9 @@
 #define CERTIFICATE "encryption/fd.crt"
 #define PRIVATE_KEY "encryption/fd.key"
 
+#define LOG_DISCONNECTED 0
+#define LOG_CONNECTED 1
+
 #define MAX_QUEUED 5
 
 /*
@@ -42,6 +45,7 @@ struct client_data
 	int fd;
 	SSL *ssl;
 	struct sockaddr_in addr;
+	
 };
 
 static GTree *client_collection;
@@ -135,6 +139,7 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 // TODO: Comment
 void free_client(struct client_data *client)
 {
+	client_logger(client, LOG_DISCONNECTED);
 	close(client->fd);
 	SSL_shutdown(client->ssl);
 	SSL_free(client->ssl);
@@ -157,7 +162,7 @@ void server_loop(int server_fd)
 		}
 		if (r == 0)
 		{
-			fprintf(stdout, "nothing for 5s\n");
+			fprintf(stdout, "nothing for 30s\n");
 			fflush(stdout);
 		}
 
@@ -175,7 +180,7 @@ int SELECT(fd_set *rfds, int server_fd)
 	g_tree_foreach(client_collection, get_max_fd, &max_fd);
 	g_tree_foreach(client_collection, fd_set_all, rfds);
 	struct timeval tv;
-	tv.tv_sec = 10;
+	tv.tv_sec = 30;
 	tv.tv_usec = 0;
 	return select(max_fd + 1, rfds, NULL, NULL, &tv);
 
@@ -199,7 +204,6 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
 	FD_SET(((struct client_data *)val)->fd, (fd_set *)data);
 	return FALSE;
 }
-
 
 /* Add client to server. Will be added to the tree and greeted
  * with a message.  */
@@ -238,7 +242,7 @@ void add_client(int server_fd, SSL_CTX *ctx)
 	memcpy(cpy, &client, client_size);
 	g_tree_insert(client_collection, &cpy->addr, cpy);
 	if (SSL_write(client.ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
-	client_logger(&client, 1);
+	client_logger(&client, LOG_CONNECTED);
 }
 
 /* Time stamp on client action, in local file system */
@@ -270,8 +274,8 @@ void client_logger(struct client_data *client, int status)
 	fwrite("> : <", 1, 5, tof);
 	fprintf(tof, "%d",port );
 	fwrite(">", 1, 2, tof);
-	if(status == 1) fwrite(" : <CONNECTED>\n", 1, 15, tof);
-	else fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
+	if (status == LOG_CONNECTED) fwrite(" : <CONNECTED>\n", 1, 15, tof);
+	else if (status == LOG_DISCONNECTED) fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
 	fflush(tof);
 	fclose(tof);
 }
@@ -327,18 +331,3 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	// (leave name and chatroom empty for now)
 	return FALSE;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
