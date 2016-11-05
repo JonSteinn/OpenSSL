@@ -90,15 +90,13 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
-gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data);
-gboolean remove_from_room(gpointer key, gpointer val, gpointer data);
+gboolean send_to_room(gpointer key, gpointer val, gpointer data);
 int find_chat_room();
 
 // HANDLERS
 void handle_who(SSL *ssl);
 void handle_list(SSL *ssl);
 void handle_join(struct client_data *client, char *buffer);
-
 
 int main(int argc, char **argv)
 {
@@ -180,7 +178,7 @@ void add_room(char *name)
 	struct room_data *newChat = g_new0(struct room_data, 1);
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
-	g_tree_insert (room_collection, newChat->name, newChat);
+	g_tree_insert (room_collection, newChat->name, newChat->members);
 }
 
 /* Comparator for sockaddr to keep tree balanced */
@@ -313,6 +311,9 @@ void add_client(int server_fd, SSL_CTX *ctx)
 
 	client->room = g_strdup(INIT_CHANNEL);
 	g_tree_insert(client_collection, &client->addr, client);
+	GTree *tree = g_tree_search(room_collection, find_chat_room, "LOBBY");
+	g_tree_insert(tree, &client->addr, client);
+	client->room = "LOBBY";
 	if (SSL_write(client->ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
 	client_logger(client, LOG_CONNECTED);
 }
@@ -372,6 +373,13 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
 			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
 			// TODO: ADD more handling else-if-s and corresponding methods
+			else
+			{
+				//fprintf(stdout, "%s\n","Sending to all" );
+				//send_to_all(client, buff);
+				GTree *tree = g_tree_search(room_collection, find_chat_room, client->room);
+				g_tree_foreach(tree, send_to_room, buff);
+			}
 		}
 		else
 		{
@@ -394,8 +402,6 @@ void handle_who(SSL *ssl)
 // TODO: COMMENT:
 void handle_list(SSL *ssl)
 {
-	//if(SSL_write(ssl, "List of chatrooms:\n", strlen("List of chatrooms:\n"))  < 0) perror("SSL write");
-	// TODO iterate through chat room tree and send info to user
 	GString * buffer = g_string_new(NULL);
 	GString * message = g_string_new("\n\nList of chatrooms:");
 
@@ -422,16 +428,42 @@ gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
 // TODO: COMMENT
 void handle_join(struct client_data *client, char *buffer)
 {
-	fprintf(stdout, "%s\n",buffer);
 	char *room_name = g_strchomp(&buffer[6]);
-	client->room = g_strndup(room_name, strlen(room_name));
+	fprintf(stdout, "%s\n",room_name);
+	fprintf(stdout, "%s\n",client->room );
+	fflush(stdout);
 	GTree *tree;
+
 	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL)
 	{
-		add_room(client->room);
+		add_room(room_name);
+		fprintf(stdout, "%s\n","Room added");
+		fflush(stdout);
 	}
-	g_tree_foreach(room_collection, remove_from_room, client);
-	g_tree_foreach(room_collection, add_to_chat_room, client);
+		tree = g_tree_search(room_collection, find_chat_room, client->room);
+
+		if(tree != NULL)
+		{
+			fprintf(stdout, "%s\n","Tree ready");
+			fflush(stdout);
+		}
+
+		if(g_tree_remove(tree, &client->addr) == FALSE)
+		{
+			fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
+		}
+		else
+		{
+			fprintf(stdout, "%s%d%s\n","Removed ", client->fd, " from tree");
+			fflush(stdout);
+		}
+
+		tree = g_tree_search(room_collection, find_chat_room, room_name);
+		fprintf(stdout, "%s\n", "Inserting into tree");
+		fflush(stdout);
+		g_tree_insert (tree, &client->addr, client);
+		fprintf(stdout, "%s%s%s%s\n", "Inserted...\n Moved from: ", client->room, " into :", room_name);
+		client->room = strdup(room_name);
 }
 
 //TODO: COMMENT
@@ -439,26 +471,11 @@ int find_chat_room(const void *name1, const void *name2)
 {
 		const char *first = name1;
 		const char *second = name2;
-		int x = chat_cmp(first, second);
+		int x = g_strcmp0(first, second);
 		if (x > 0) return -1;
 		if (x < 0) return 1;
 		return 0;
 }
-
-
-// TODO: COMMENT
-gboolean add_to_chat_room(gpointer key, gpointer val, gpointer data)
-{
-	UNUSED(key);
-	struct room_data * room = val;
-	struct client_data * client = data;
-	if (room->name == client->room)
-	{
-		g_tree_insert (room->members, &client->addr, client);
-	}
-	return FALSE;
-}
-
 
 // TODO: COMMENT
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
@@ -496,15 +513,10 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	return FALSE;
 }
 
-// TODO: COMMENT
-gboolean remove_from_room(gpointer key, gpointer val, gpointer data)
+gboolean send_to_room(gpointer key, gpointer val, gpointer data)
 {
 	UNUSED(key);
-	struct room_data * room = val;
-	struct client_data * client = data;
-	if (room->name == client->room)
-	{
-		g_tree_remove (room->members, &client->addr);
-	}
+	struct client_data * client = val;
+	if(SSL_write(client->ssl, data, strlen(data)) < 0) perror("SSL write");
 	return FALSE;
 }

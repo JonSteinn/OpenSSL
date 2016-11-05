@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <glib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -119,7 +120,7 @@ void client_loop()
 		FD_ZERO(&rfds);
 		FD_SET(STDIN_FILENO, &rfds);
 		FD_SET(server_fd, &rfds);
-		timeout.tv_sec = 5;
+		timeout.tv_sec = 45;
 		timeout.tv_usec = 0;
 		int r = select(server_fd + 1, &rfds, NULL, NULL, &timeout);
 		if (r < 0)
@@ -197,9 +198,12 @@ void readline_callback(char *line)
 	else if (strncmp("/who", line, 4) == 0) request_who();
 	else
 	{
-		snprintf(buffer, 255, "Message: %s\n", line);
+		snprintf(buffer, 255, "\nMessage: %s", line);
 		write(STDOUT_FILENO, buffer, strlen(buffer));
 		fsync(STDOUT_FILENO);
+		GString * message = g_string_new(NULL);
+		message = g_string_append(message, buffer);
+		if(SSL_write(server_ssl, message->str, message->len) == -1) perror("SSL_write");
 	}
 }
 
