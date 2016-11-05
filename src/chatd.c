@@ -80,6 +80,7 @@ gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 void handle_who(SSL *ssl);
 void handle_list(SSL *ssl);
 gboolean send_client_list(gpointer key, gpointer val, gpointer data);
+gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
 
 int main(int argc, char **argv)
 {
@@ -152,6 +153,8 @@ void init_chat_rooms()
 {
 	room_collection = g_tree_new(chat_cmp);
 	add_room(INIT_CHANNEL);
+	add_room("Gamers");
+	add_room("Study");
 }
 
 void add_room(char *name)
@@ -159,6 +162,7 @@ void add_room(char *name)
 	struct room_data *newChat = g_new0(struct room_data, 1);
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
+	g_tree_insert (room_collection, newChat->name, newChat);
 }
 
 
@@ -361,7 +365,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 // TODO: Comment
 void handle_who(SSL *ssl)
 {
-	SSL_write(ssl, "List of clients:\n", strlen("List of client:\n"));
+	if(SSL_write(ssl, "List of clients:\n", strlen("List of clients:\n")) < 0) perror("SSL write");
 	GString * buffer = g_string_new(NULL);
 	g_tree_foreach(client_collection, send_client_list, buffer);
 	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
@@ -371,9 +375,12 @@ void handle_who(SSL *ssl)
 // TODO: COMMENT:
 void handle_list(SSL *ssl)
 {
-	UNUSED(ssl);
+	if(SSL_write(ssl, "List of chatrooms:\n", strlen("List of chatrooms:\n"))  < 0) perror("SSL write");
 	// TODO iterate through chat room tree and send info to user
-	
+	GString * buffer = g_string_new(NULL);
+	g_tree_foreach(room_collection, send_chat_rooms, buffer);
+	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
+	g_string_free(buffer, TRUE);
 }
 
 // TODO COMMENT, UPDATE
@@ -409,5 +416,16 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	buffer = g_string_append(buffer, "\n");
 
 	g_free(port);
+	return FALSE;
+}
+
+// TODO Comment
+gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	struct room_data *room = val;
+	GString * buffer = data;
+	buffer = g_string_append(buffer, "\n");
+	buffer = g_string_append(buffer, room->name);
 	return FALSE;
 }
