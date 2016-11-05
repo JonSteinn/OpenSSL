@@ -18,6 +18,7 @@
 #include <openssl/err.h>
 #include <openssl/engine.h>
 #include <openssl/conf.h>
+#include <ctype.h>
 
 #define UNUSED(x) (void)(x)
 
@@ -402,7 +403,9 @@ void handle_list(SSL *ssl)
 // TODO: COMMENT
 void handle_join(struct client_data *client, char *buffer)
 {
-	char *room_name = g_strchomp(&buffer[6]);
+	int i = 5;
+	while (buffer[i] != '\0' && isspace(buffer[i])) { i++; }
+	char *room_name = g_strchomp(&buffer[i]);
 	client->room = g_strndup(room_name, strlen(room_name));
 	g_tree_foreach(room_collection, find_chat_room, client);
 }
@@ -414,7 +417,7 @@ gboolean find_chat_room(gpointer key, gpointer val, gpointer data)
 	struct client_data * client = data;
 	if (room->name == client->room)
 	{
-		g_tree_insert (room->members, client->name, client->name);
+		g_tree_insert (room->members, &client->addr, client);
 	}
 	return FALSE;
 }
