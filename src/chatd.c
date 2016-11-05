@@ -155,8 +155,7 @@ void init_chat_rooms()
 
 void add_room(char *name)
 {
-	struct room_data tmp;
-	struct room_data *newChat = (struct room_data *)malloc(sizeof(tmp));
+	struct room_data *newChat = g_new0(struct room_data, 1);
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
 }
