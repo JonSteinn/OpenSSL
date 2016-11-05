@@ -277,10 +277,10 @@ void client_logger(struct client_data *client, int status)
 }
 
 // TODO: COMMENT
-gboolean responde_to_client(gpointer key, gpointer value, gpointer data)
+gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 {
 	UNUSED(key);
-	struct client_data *client = value;
+	struct client_data *client = val;
 	char buff[512];
 	if (FD_ISSET(client->fd, (fd_set *)data))
 	{
@@ -303,5 +303,42 @@ void handle_who(SSL *ssl)
 {
 	// TODO: Replace by actual list of clients
 	// Needs to be done with a foreach loop through tree
-	SSL_write(ssl, "response to /who", strlen("response to /who"));
+	SSL_write(ssl, "List of clients:", strlen("List of client:"));
 }
+
+// TODO COMMENT:
+gboolean send_client_list(gpointer key, gpointer val, gpointer data)
+{
+	//TODO: remove those you use from unused
+	UNUSED(key);
+	UNUSED(val);
+	UNUSED(data);
+	//char buffer[100];
+	//char *ip = inet_ntoa(client->addr.sin_addr);
+	//uint16_t port = client->addr.sin_port;
+	//TODO -----> /* SSL_write(ssl, */ 
+	// FORMAT IDEA:
+	//	
+	//	Name: john 
+	//	Chatroom: tsam
+	//	IP: 1.1.1.1
+	//  port: 2000
+	//
+	// (leave name and chatroom empty for now)
+	return FALSE;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
