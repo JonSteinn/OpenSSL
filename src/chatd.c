@@ -346,6 +346,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 		{
 			if (strncmp(buff, "/who", 4) == 0) handle_who(client->ssl);
 			else if (strncmp(buff, "/bye", 4) == 0) free_client(client);
+			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
 			// TODO: ADD more handling else-if-s and corresponding methods
 		}
 		else
@@ -366,12 +367,16 @@ void handle_who(SSL *ssl)
 	// TODO: free G-strenginn
 }
 
+// TODO: COMMENT:
+void handle_list(SSL *ssl)
+{
+	// TODO iterate through chat room tree and send info to user
+}
+
 // TODO COMMENT, UPDATE
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 {
 	// TODO: comment steps
-
-
 	UNUSED(key);
 	struct client_data *client = val;
 	GString * buffer = data;
