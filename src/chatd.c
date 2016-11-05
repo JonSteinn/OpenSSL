@@ -72,13 +72,14 @@ void add_client(int server_fd, SSL_CTX *ctx);
 void client_logger(struct client_data *client, int status);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 void handle_who(SSL *ssl);
+gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 
 int main(int argc, char **argv)
 {
 	if (argc < 2) exit_error("argument");
 	const int server_port = strtol(argv[1], NULL, 0);
 	fprintf(stdout, "Starting server on port %d\n", server_port);
-	fflush(stdout);	
+	fflush(stdout);
 	init_SSL();
 	int server_fd = init_server(server_port);
 	client_collection = g_tree_new(sockaddr_in_cmp);
@@ -105,7 +106,7 @@ void init_SSL()
 	if (SSL_CTX_use_certificate_file(ctx, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
 	if (SSL_CTX_use_PrivateKey_file(ctx, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
 	if (SSL_CTX_check_private_key(ctx) != 1) exit_error("match");
-	fprintf(stdout, "Access granted\n"); 
+	fprintf(stdout, "Access granted\n");
 	fflush(stdout);
 }
 
@@ -242,7 +243,7 @@ void add_client(int server_fd, SSL_CTX *ctx)
 		perror("SSL accept");
 		return;
 	}
-	
+
 	fprintf(stdout, "New client! FD = %d\n", client.fd);
 	fflush(stdout);
 
@@ -315,27 +316,36 @@ void handle_who(SSL *ssl)
 {
 	// TODO: Replace by actual list of clients
 	// Needs to be done with a foreach loop through tree
-	SSL_write(ssl, "List of clients:", strlen("List of client:"));
+	SSL_write(ssl, "List of clients:\n", strlen("List of client:\n"));
+
+	GString * buffer = g_string_new(NULL);
+	g_tree_foreach(client_collection, send_client_list, buffer);
+	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
 }
 
-// TODO COMMENT:
+// TODO COMMENT, UPDATE
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 {
-	//TODO: remove those you use from unused
+
 	UNUSED(key);
-	UNUSED(val);
-	UNUSED(data);
-	//char buffer[100];
-	//char *ip = inet_ntoa(client->addr.sin_addr);
-	//uint16_t port = client->addr.sin_port;
-	//TODO -----> /* SSL_write(ssl, */ 
-	// FORMAT IDEA:
-	//	
-	//	Name: john 
-	//	Chatroom: tsam
-	//	IP: 1.1.1.1
-	//  port: 2000
-	//
-	// (leave name and chatroom empty for now)
+	struct client_data *client = val;
+	GString * buffer = data;
+	char *ip = inet_ntoa(client->addr.sin_addr);
+	gchar * port = g_strdup_printf(":%i ", client->addr.sin_port);
+
+	buffer = g_string_append(buffer, "Name: \n");
+	// TODO Write name(nickname) to the buffer
+	buffer = g_string_append(buffer, "Chatroom: ");
+	/* TODO Check if a user belongs to any chatroom/s
+					and write them to the buffer
+	*/
+	buffer = g_string_append(buffer, "Lobby\n");
+	buffer = g_string_append(buffer, "IP: ");
+	buffer = g_string_append(buffer, ip);
+	buffer = g_string_append(buffer, "\n");
+	buffer = g_string_append(buffer, "Port: ");
+	buffer = g_string_append(buffer, port);
+	buffer = g_string_append(buffer, "\n\n");
+
 	return FALSE;
 }
