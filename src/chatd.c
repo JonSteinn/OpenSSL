@@ -178,9 +178,8 @@ void add_room(char *name)
 	struct room_data *newChat = g_new0(struct room_data, 1);
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
-	g_tree_insert (room_collection, newChat->name, newChat->members);
+	g_tree_insert (room_collection, newChat->name, newChat);
 }
-
 
 /* Comparator for sockaddr to keep tree balanced */
 int sockaddr_in_cmp(const void *addr1, const void *addr2)
@@ -392,12 +391,29 @@ void handle_who(SSL *ssl)
 // TODO: COMMENT:
 void handle_list(SSL *ssl)
 {
-	if(SSL_write(ssl, "List of chatrooms:\n", strlen("List of chatrooms:\n"))  < 0) perror("SSL write");
+	//if(SSL_write(ssl, "List of chatrooms:\n", strlen("List of chatrooms:\n"))  < 0) perror("SSL write");
 	// TODO iterate through chat room tree and send info to user
 	GString * buffer = g_string_new(NULL);
+	GString * message = g_string_new("\n\nList of chatrooms:");
+
 	g_tree_foreach(room_collection, send_chat_rooms, buffer);
-	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
+	message = g_string_append (message, buffer->str);
+	message = g_string_append (message, "\n");
+	if(SSL_write(ssl, message->str, message->len) < 0) perror("SSL write");
 	g_string_free(buffer, TRUE);
+	g_string_free(message, TRUE);
+}
+
+// TODO Comment
+gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	const struct room_data * room = val;
+	GString * buffer = data;
+	buffer = g_string_append(buffer, "\n");
+	buffer = g_string_append(buffer, room->name);
+
+	return FALSE;
 }
 
 // TODO: COMMENT
@@ -456,16 +472,5 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	buffer = g_string_append(buffer, "\n");
 
 	g_free(port);
-	return FALSE;
-}
-
-// TODO Comment
-gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
-{
-	UNUSED(key);
-	struct room_data *room = val;
-	GString * buffer = data;
-	buffer = g_string_append(buffer, "\n");
-	buffer = g_string_append(buffer, room->name);
 	return FALSE;
 }
