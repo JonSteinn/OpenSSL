@@ -34,7 +34,7 @@
  * 1 fd = File descriptor
  * 2 ssl = ssl descriptor
  * 3 addr = socket info
- * 4 ...
+ * 4 ... // TODO UPDATE
  * 5 ...
  * 6 ...
  * 7 ...
@@ -45,7 +45,15 @@ struct client_data
 	int fd;
 	SSL *ssl;
 	struct sockaddr_in addr;
-	
+	char *name;
+	char *room;
+};
+
+// TODO: Comment
+struct room_data
+{
+	char *name;
+	GTree *members;
 };
 
 static GTree *client_collection;
