@@ -21,8 +21,8 @@
 
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "encryption/fd.crt"
-#define PRIVATE_KEY "encryption/fd.key"
+#define CERTIFICATE "../encryption/fd.crt"
+#define PRIVATE_KEY "../encryption/fd.key"
 
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
@@ -78,12 +78,13 @@ void add_client(int server_fd, SSL_CTX *ctx);
 void client_logger(struct client_data *client, int status);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 void handle_who(SSL *ssl);
+void handle_list(SSL *ssl);
 gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 
 int main(int argc, char **argv)
 {
 	// TODO: COMMENT STEPS
-	 
+
 	if (argc < 2) exit_error("argument");
 	const int server_port = strtol(argv[1], NULL, 0);
 	fprintf(stdout, "Starting server on port %d\n", server_port);
@@ -110,7 +111,7 @@ void exit_error(char *msg)
 void init_SSL()
 {
 	//TODO: Comment steps
-	
+
 	SSL_library_init();
 	SSL_load_error_strings();
 	if ((ctx = SSL_CTX_new(TLSv1_method())) == NULL) exit_error("SSL CTX");
@@ -261,7 +262,7 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
  * with a message.  */
 void add_client(int server_fd, SSL_CTX *ctx)
 {
-	// TODO: comment steps	
+	// TODO: comment steps
 	struct client_data *client = g_new0(struct client_data, 1);
 	socklen_t scklen = (socklen_t)sizeof(client->addr);
 
@@ -364,13 +365,15 @@ void handle_who(SSL *ssl)
 	GString * buffer = g_string_new(NULL);
 	g_tree_foreach(client_collection, send_client_list, buffer);
 	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
-	// TODO: free G-strenginn
+	g_string_free(buffer, TRUE);
 }
 
 // TODO: COMMENT:
 void handle_list(SSL *ssl)
 {
+	UNUSED(ssl);
 	// TODO iterate through chat room tree and send info to user
+	
 }
 
 // TODO COMMENT, UPDATE
@@ -383,19 +386,28 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	char *ip = inet_ntoa(client->addr.sin_addr);
 	gchar * port = g_strdup_printf(":%i ", client->addr.sin_port);
 
-	buffer = g_string_append(buffer, "\nName: \n");
-	// TODO Write name(nickname) to the buffer
-	buffer = g_string_append(buffer, "Chatroom: ");
-	/* TODO Check if a user belongs to any chatroom/s
-					and write them to the buffer
-	*/
-	buffer = g_string_append(buffer, "Lobby\n");
-	buffer = g_string_append(buffer, "IP: ");
+	buffer = g_string_append(buffer, "\nName: ");
+	if(client->name == NULL){}
+	else
+	{
+		buffer = g_string_append(buffer, client->name);
+	}
+
+	buffer = g_string_append(buffer, "\nChatroom: ");
+
+	if(client->room == NULL){
+		buffer = g_string_append(buffer, "No Room");
+	}
+	else
+	{
+		buffer = g_string_append(buffer, client->room);
+	}
+	buffer = g_string_append(buffer, "\nIP: ");
 	buffer = g_string_append(buffer, ip);
-	buffer = g_string_append(buffer, "\n");
-	buffer = g_string_append(buffer, "Port: ");
+	buffer = g_string_append(buffer, "\nPort: ");
 	buffer = g_string_append(buffer, port);
 	buffer = g_string_append(buffer, "\n");
 
+	g_free(port);
 	return FALSE;
 }
