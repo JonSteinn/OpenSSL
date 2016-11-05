@@ -57,6 +57,7 @@ struct room_data
 };
 
 static GTree *client_collection;
+static GTree *room_collection;
 static SSL_CTX *ctx;
 
 void exit_error(char *msg);
@@ -76,6 +77,8 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 
 int main(int argc, char **argv)
 {
+	// TODO: COMMENT STEPS
+	 
 	if (argc < 2) exit_error("argument");
 	const int server_port = strtol(argv[1], NULL, 0);
 	fprintf(stdout, "Starting server on port %d\n", server_port);
@@ -83,6 +86,7 @@ int main(int argc, char **argv)
 	init_SSL();
 	int server_fd = init_server(server_port);
 	client_collection = g_tree_new(sockaddr_in_cmp);
+	
 	server_loop(server_fd);
 	exit(EXIT_SUCCESS);
 }
@@ -100,6 +104,8 @@ void exit_error(char *msg)
  * Parameters: SSL certificate */
 void init_SSL()
 {
+	//TODO: Comment steps
+	
 	SSL_library_init();
 	SSL_load_error_strings();
 	if ((ctx = SSL_CTX_new(TLSv1_method())) == NULL) exit_error("SSL CTX");
@@ -119,6 +125,8 @@ void init_SSL()
  * Return value: file descriptor of server */
 int init_server(int port)
 {
+	// TODO: Comment steps
+
 	int socket_fd;
 	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
 	struct sockaddr_in server;
@@ -136,6 +144,8 @@ int init_server(int port)
 /* Comparator for sockaddr to keep tree balanced */
 int sockaddr_in_cmp(const void *addr1, const void *addr2)
 {
+	// TODO: comment steps
+
 	const struct sockaddr_in *_addr1 = addr1;
 	const struct sockaddr_in *_addr2 = addr2;
 	if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) return -1;
@@ -148,6 +158,8 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 // TODO: Comment
 void free_client(struct client_data *client)
 {
+	// TODO: comment steps
+
 	client_logger(client, LOG_DISCONNECTED);
 	close(client->fd);
 	SSL_shutdown(client->ssl);
@@ -159,6 +171,8 @@ void free_client(struct client_data *client)
 /* Main loop of server */
 void server_loop(int server_fd)
 {
+	// TODO: comment steps
+
 	while (1)
 	{
 		fd_set rfds;
@@ -183,6 +197,8 @@ void server_loop(int server_fd)
 /* A wrapped version select, that handles attinional logic. */
 int SELECT(fd_set *rfds, int server_fd)
 {
+	// TODO: comment steps
+
 	FD_ZERO(rfds);
 	FD_SET(server_fd, rfds);
 	int max_fd = server_fd;
@@ -218,6 +234,8 @@ gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
  * with a message.  */
 void add_client(int server_fd, SSL_CTX *ctx)
 {
+	// TODO: comment steps
+	
 	struct client_data client;
 	size_t client_size = sizeof(client);
 	memset(&client, 0, client_size);
@@ -257,6 +275,8 @@ void add_client(int server_fd, SSL_CTX *ctx)
 /* Time stamp on client action, in local file system */
 void client_logger(struct client_data *client, int status)
 {
+	// TODO: Comment steps
+
 	char *ip = inet_ntoa(client->addr.sin_addr);
 	uint16_t port = client->addr.sin_port;
 
@@ -292,6 +312,8 @@ void client_logger(struct client_data *client, int status)
 // TODO: COMMENT
 gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 {
+	// TODO: COMMENT steps
+
 	UNUSED(key);
 	struct client_data *client = val;
 	char buff[512];
@@ -314,18 +336,18 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 // TODO: Comment
 void handle_who(SSL *ssl)
 {
-	// TODO: Replace by actual list of clients
-	// Needs to be done with a foreach loop through tree
 	SSL_write(ssl, "List of clients:\n", strlen("List of client:\n"));
-
 	GString * buffer = g_string_new(NULL);
 	g_tree_foreach(client_collection, send_client_list, buffer);
 	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
+	// TODO: free G-strenginn
 }
 
 // TODO COMMENT, UPDATE
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 {
+	// TODO: comment steps
+
 
 	UNUSED(key);
 	struct client_data *client = val;
