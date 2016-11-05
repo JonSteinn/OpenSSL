@@ -26,7 +26,7 @@ static SSL_CTX *ssl_ctx;
 static char *prompt;
 static int running = 1;
 
-void signal_handler(int signum); 
+void signal_handler(int signum);
 void exit_error(char *msg);
 int init_server_connection(int port);
 void init_ssl();
@@ -35,7 +35,7 @@ void client_loop();
 void readline_callback(char *line);
 void request_quit();
 void request_game();
-void request_join();
+void request_join(char *line);
 void request_list();
 void request_roll();
 void request_say();
@@ -187,7 +187,7 @@ void readline_callback(char *line)
 
 	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0)) request_quit();
 	else if (strncmp("/game", line, 5) == 0) request_game();
-	else if (strncmp("/join", line, 5) == 0) request_join();
+	else if (strncmp("/join", line, 5) == 0) request_join(line);
 	else if (strncmp("/list", line, 5) == 0) request_list();
 	else if (strncmp("/roll", line, 5) == 0) request_roll();
 	else if (strncmp("/say", line, 4) == 0) request_say();
@@ -210,13 +210,26 @@ void request_game()
 {
 	// TODO
 }
-void request_join()
+void request_join(char *line)
 {
-	// TODO
+	int i = 5;
+	while(line[i] != '\0' && isspace(line[i])) {i++;}
+	if(line[i] == '\0')
+	{
+		write(STDOUT_FILENO, "Usage: /join chatroom\n", 22);
+		fsync(STDOUT_FILENO);
+		rl_redisplay();
+	}
+	char *chatroom = strdup(&(line[i]));
+	if(SSL_write(server_ssl, line, strlen(line)) == -1) perror("/join");
+	free(prompt);
+	strcat(chatroom, "> ");
+	prompt = strdup(chatroom);
+	rl_set_prompt(prompt);
 }
 void request_list()
 {
-	// TODO
+	if(SSL_write(server_ssl, "/list", strlen("/list")) == -1) perror("/list");
 }
 void request_roll()
 {
