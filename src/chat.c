@@ -141,20 +141,24 @@ void client_loop()
 		// If server is ready to talk
 		if (FD_ISSET(server_fd, &rfds))
 		{
-			char buffer[512];
+			char buffer[1024];
 			int size;
-			if ((size = SSL_read(server_ssl, buffer, 512)) < 0)
+			if ((size = SSL_read(server_ssl, buffer, 1024)) < 0)
 			{
 				perror("Error receiving message\n");
 				break;
 			}
 			else if (size == 0) continue; // <--------- double check later
-			else
+			if(strlen(buffer) > 0)
 			{
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
 				fflush(stdout);
-				write (STDOUT_FILENO, prompt, strlen(prompt));
+				if (strlen(buffer == 0))
+				{
+					write (STDOUT_FILENO, prompt, strlen(prompt));
+					fsync(STDOUT_FILENO);/
+				}
 			}
 		}
 	}

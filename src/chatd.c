@@ -63,24 +63,39 @@ static GTree *room_collection;
 static SSL_CTX *ctx;
 
 void exit_error(char *msg);
+
+// INITIALIZERS
 void init_SSL();
 int init_server(int port);
 void init_chat_rooms();
+
+// COMPARISON
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
 int chat_cmp(const void *name1, const void *name2);
+
+// ADDING
 void add_room(char *nane);
+void add_client(int server_fd, SSL_CTX *ctx);
+
+// MISC
 void free_client(struct client_data *client);
 void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
+void client_logger(struct client_data *client, int status);
+
+// ITERATION
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
 gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
-void add_client(int server_fd, SSL_CTX *ctx);
-void client_logger(struct client_data *client, int status);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
-void handle_who(SSL *ssl);
-void handle_list(SSL *ssl);
 gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
+gboolean find_chat_room(gpointer key, gpointer val, gpointer data);
+
+// HANDLERS
+void handle_who(SSL *ssl);
+void handle_list(SSL *ssl);
+void handle_join(struct client_data *client, char *buffer);
+
 
 int main(int argc, char **argv)
 {
@@ -352,6 +367,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			if (strncmp(buff, "/who", 4) == 0) handle_who(client->ssl);
 			else if (strncmp(buff, "/bye", 4) == 0) free_client(client);
 			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
+			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
 			// TODO: ADD more handling else-if-s and corresponding methods
 		}
 		else
@@ -365,7 +381,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 // TODO: Comment
 void handle_who(SSL *ssl)
 {
-	if(SSL_write(ssl, "List of clients:\n", strlen("List of clients:\n")) < 0) perror("SSL write");
+	if(SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
 	GString * buffer = g_string_new(NULL);
 	g_tree_foreach(client_collection, send_client_list, buffer);
 	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
@@ -383,7 +399,32 @@ void handle_list(SSL *ssl)
 	g_string_free(buffer, TRUE);
 }
 
-// TODO COMMENT, UPDATE
+void handle_join(struct client_data *client, char *buffer)
+{
+	char room[512];
+	fprintf(stdout, "%s\n","Before strncpy: ");
+	fprintf(stdout, "%s\n",buffer );
+	strncpy(room, buffer +6, strlen(buffer) -6);
+	fprintf(stdout, "%s\n","After strncpy: ");
+	fprintf(stdout, "%s\n",room );
+	client->room = strdup(room);
+	g_tree_foreach(room_collection, find_chat_room, client);
+}
+
+gboolean find_chat_room(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	struct room_data * room = val;
+	struct client_data * client = data;
+	if (room->name == client->room)
+	{
+		g_tree_insert (room_collection, room->name, data);
+	}
+	return FALSE;
+}
+
+
+// TODO COMMENT
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 {
 	// TODO: comment steps
