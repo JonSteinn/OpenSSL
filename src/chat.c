@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	const int server_port = strtol(argv[1], NULL, 0);
 	server_fd = init_server_connection(server_port);
 	init_ssl();
-	prompt = strdup("> ");
+	prompt = strdup("Lobby> ");
 	rl_callback_handler_install(prompt, (rl_vcpfunc_t*) &readline_callback);
 	client_loop();
 	close_connection();
