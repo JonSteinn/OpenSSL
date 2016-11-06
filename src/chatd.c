@@ -1,3 +1,20 @@
+/***********************************************************************************************************
+ _______  _______  _          _______  _______  _______           _______  _______ 
+(  ____ \(  ____ \( \        (  ____ \(  ____ \(  ____ )|\     /|(  ____ \(  ____ )
+| (    \/| (    \/| (        | (    \/| (    \/| (    )|| )   ( || (    \/| (    )|
+| (_____ | (_____ | |        | (_____ | (__    | (____)|| |   | || (__    | (____)|
+(_____  )(_____  )| |        (_____  )|  __)   |     __)( (   ) )|  __)   |     __)
+      ) |      ) || |              ) || (      | (\ (    \ \_/ / | (      | (\ (   
+/\____) |/\____) || (____/\  /\____) || (____/\| ) \ \__  \   /  | (____/\| ) \ \__
+\_______)\_______)(_______/  \_______)(_______/|/   \__/   \_/   (_______/|/   \__/
+
+************************************************************************************************************
+JON STEINN ELIASSON   - JONSTEINN@GMAIL.COM
+DADI GUDVARDARSON     - DADIG4@GMAIL:COM
+DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
+************************************************************************************************************/
+
+/* Libraries */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,29 +37,39 @@
 #include <openssl/conf.h>
 #include <ctype.h>
 
+/* Defines */
+
+/* Used to fool compiler with unused parameters */
 #define UNUSED(x) (void)(x)
 
-#define CERTIFICATE "../encryption/fd.crt"
-#define PRIVATE_KEY "../encryption/fd.key"
+/* Paths to file. These are relative to the root of the project. 
+ * By adding '../' in front, one can run from '/src'. */
+#define CERTIFICATE "encryption/fd.crt"
+#define PRIVATE_KEY "encryption/fd.key"
 
+/* Flags for logger */
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
 
+/* Metrics for clients */
 #define MAX_QUEUED 5
 
+/* Name of initial channel */
 #define INIT_CHANNEL "LOBBY"
 
-/*
- * Data structure for clients.
- * 1 fd = File descriptor
- * 2 ssl = ssl descriptor
- * 3 addr = socket info
- * 4 ... // TODO UPDATE
- * 5 ...
- * 6 ...
- * 7 ...
- * 8 ...
- * */
+
+
+
+
+/* Data structure for clients. It includes the following fields:
+ *   (identifier, type, description)
+ *   1: fd, int, file descriptor
+ *   2: ssl, SSL, SSL connection
+ *   3: addr, struct sockaddr_in, port&ip info
+ *   4: name, char *, name of user
+ *   5: room, char *, current channel
+ * Each new member will receive one and initially, all will be set
+ * to the inital channel. */
 struct client_data
 {
 	int fd;
@@ -52,39 +79,45 @@ struct client_data
 	char *room;
 };
 
-// TODO: Comment
+/* Data structure for chat rooms. It includes the following fields:
+ *   (identifier, type, description)
+ *   1: name, char *, name of channel
+ *   2: members, GTree *, collection of clients
+ * Each chat room has a tree of the user it contains. Initially, one 
+ * one channel exists. */
 struct room_data
 {
 	char *name;
 	GTree *members;
 };
 
+/* Global variables */
 static GTree *client_collection;
 static GTree *room_collection;
 static SSL_CTX *ctx;
 
 void exit_error(char *msg);
 
-// INITIALIZERS
+/* Initializers */
 void init_SSL();
 int init_server(int port);
 void init_chat_rooms();
 
-// COMPARISON
+/* COMPARISON */
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
 int chat_cmp(const void *name1, const void *name2);
 
-// ADDING
+/* ADDING */
 void add_room(char *name);
 void add_client(int server_fd, SSL_CTX *ctx);
 
-// MISC
+/* MISC */
 void free_client(struct client_data *client);
 void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
 void client_logger(struct client_data *client, int status);
 
-// ITERATION
+/* ITERATION */
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
 gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
@@ -93,7 +126,7 @@ gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
 gboolean send_to_room(gpointer key, gpointer val, gpointer data);
 int find_chat_room();
 
-// HANDLERS
+/* HANDLERS */
 void handle_who(SSL *ssl);
 void handle_list(SSL *ssl);
 void handle_join(struct client_data *client, char *buffer);
