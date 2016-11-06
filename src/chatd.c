@@ -616,54 +616,16 @@ void handle_list(SSL *ssl)
  * not exist, we create it but.  */
 void handle_join(struct client_data *client, char *buffer)
 {
-	
-	g_tree_remove(g_tree_search(room_collection, chat_cmp, client->room), &client->addr);
-	g_free(client->room);
+	/////////////////////
+	// TODO /////////////
+	/////////////////////
+	// Testing needed to this can be considered implemented
+	// i. Total 1 clients, leave lobby to a already existing channel
+	// ii. Total 1 clients, leave lobby to a non-existing channel
+	// iii. Total 1. clients, leave a session-make channel to some else
+	// iv. Total 2 clients, make both join a premade channel, speak
+	// v. Total 2 clients, make both join a non-existing channel, speak
 
-
-	client->room = g_strchomp(&buffer[6]);
-	GTree *tree;
-	if ((tree = g_tree_search(room_collection, chat_cmp, client->room)) == NULL)
-	{
-		add_room(client->room);
-		tree = g_tree_search(room_collection, chat_cmp, client->room);
-	}
-
-	g_tree_insert(tree, &client->addr, client);
-
-	// If chat room does not exist, we create it, and then assign tree pointer
-	// to the resulting one, otherwise we just assign it to the already existing
-	// one. This would only not work if add_room was faulty.
-	/*	GTree *tree;
-	if ((tree = g_tree_search(room_collection, chat_cmp, room_name)) == NULL)
-	{
-		add_room(room_name);
-		tree = g_tree_search(room_collection, chat_cmp, room_name);
-	}
-
-	if (tree != NULL)
-	{
-		fprintf(stdout, "%s\n","Tree ready");
-		fflush(stdout);
-	}
-
-	if (g_tree_remove(g_tree_search(room_collection, chat_cmp, client->room), &client->addr) == FALSE)
-	{
-		fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
-	}
-
-	tree = g_tree_search(room_collection, chat_cmp, room_name);
-
-	g_tree_insert(tree, &client->addr, client);
-	
-	char *old_name = client->room;
-	client->room = room_name;
-	g_free(old_name);
-
-
-	//printf("%d\n", g_tree_nnodes(g_tree_search(room_collection, chat_cmp, "Lobby")));
-	//printf("%d\n", g_tree_nnodes(g_tree_search(room_collection, chat_cmp, "channel")));
-	*/
 }
 
 
