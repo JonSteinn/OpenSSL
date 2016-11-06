@@ -60,26 +60,31 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #define LINE_BUFFER 256
 #define PROMPT_BUFFER 128
 
+/* Commands */
+#define BYE "/bye"
+#define QUIT "/quit"
+#define GAME "/game"
+#define JOIN "/join"
+#define LIST "/list"
+#define ROLL "/roll"
+#define SAY "/say"
+#define USER "/user"
+#define WHO "/who"
+
+
+
+
 
 /* Global variables */
 static int server_fd;
 static SSL *server_ssl;   
 static SSL_CTX *ssl_ctx;
 static char *prompt;
-static int running = 1;
+static int running = TRUE;
 
 
 
 
-
-/* Misc */
-void signal_handler(int signum);
-void exit_error(char *msg);
-void close_connection();
-void client_loop();
-void readline_callback(char *line);
-void getpasswd(const char *prompt, char *passwd, size_t size);
-int SELECT(fd_set *rfds, int server_fd);
 
 /* Initializers */
 int init_server_connection(int port);
@@ -94,10 +99,20 @@ void request_say();
 void request_user();
 void request_who();
 
+/* Misc */
+void signal_handler(int signum);
+void exit_error(char *msg);
+void close_connection();
+void client_loop();
+void readline_callback(char *line);
+void getpasswd(const char *prompt, char *passwd, size_t size);
+int SELECT(fd_set *rfds, int server_fd);
 
 
 
 
+
+/* Starting point */
 int main(int argc, char **argv)
 {
 	// Terminate if port is not passed with arguments
@@ -137,7 +152,7 @@ void signal_handler(int signum)
 	UNUSED(signum);
 
 	// Stops client loop
-	running = 0;
+	running = FALSE;
 
 	// Message
 	if (write(STDOUT_FILENO, "Connection closed\n", 12) < 0) perror("write");
@@ -160,10 +175,7 @@ void exit_error(char *msg)
 
 
 /* Initialization of sockets and connection to server. All error 
- * leads to termination.
- * 
- * Parameters: port of client
- * Return value: file descriptor (int) */
+ * leads to termination. Returns file descriptor (int) */
 int init_server_connection(int port)
 {
 	// Setup socket
@@ -192,6 +204,7 @@ int init_server_connection(int port)
  * termination of program. */
 void init_ssl()
 {
+	// Internal SSL init functions
 	SSL_library_init();
 	SSL_load_error_strings();
 
@@ -278,6 +291,7 @@ void client_loop()
 			else if (size == 0) continue; // TODO: CHANGE TO return; AND TEST. THAT IS THE CORRECT WAY!!!!
 			else
 			{
+				// Print message from server
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
 				fflush(stdout);
@@ -292,7 +306,8 @@ void client_loop()
 
 
 
-/* A wrapped version select, that handles attinional logic. */
+/* A wrapped version select, that handles attinional logic. 
+ * Returns the return value of select() */
 int SELECT(fd_set *rfds, int server_fd)
 {
 	// Restart pool
@@ -333,7 +348,7 @@ int SELECT(fd_set *rfds, int server_fd)
 void readline_callback(char *line)
 {
 	// If nothing is entered.
-	if (NULL == line)
+	if (line == NULL)
 	{
 		rl_callback_handler_remove();
 		return;
@@ -343,14 +358,14 @@ void readline_callback(char *line)
 	if (strlen(line) > 0) add_history(line);
 
 	// Command handlers:
-	if ((strncmp("/bye", line, 4) == 0) || (strncmp("/quit", line, 5) == 0)) running = 0;
-	else if (strncmp("/game", line, 5) == 0) request_game();
-	else if (strncmp("/join", line, 5) == 0) request_join(line);
-	else if (strncmp("/list", line, 5) == 0) request_list();
-	else if (strncmp("/roll", line, 5) == 0) request_roll();
-	else if (strncmp("/say", line, 4) == 0) request_say();
-	else if (strncmp("/user", line, 5) == 0) request_user();
-	else if (strncmp("/who", line, 4) == 0) request_who();
+	if ((strncmp(BYE, line, 4) == 0) || (strncmp(QUIT, line, 5) == 0)) running = FALSE;
+	else if (strncmp(GAME, line, 5) == 0) request_game();
+	else if (strncmp(JOIN, line, 5) == 0) request_join(line);
+	else if (strncmp(LIST, line, 5) == 0) request_list();
+	else if (strncmp(ROLL, line, 5) == 0) request_roll();
+	else if (strncmp(SAY, line, 4) == 0) request_say();
+	else if (strncmp(USER, line, 5) == 0) request_user();
+	else if (strncmp(WHO, line, 4) == 0) request_who();
 	else
 	{
 		// Place message in buffer
@@ -393,7 +408,7 @@ void request_join(char *line)
 	// On error, we won't change channel
 	if (SSL_write(server_ssl, line, strlen(line)) == -1)
 	{
-		perror("/join");
+		perror(JOIN);
 		return;
 	}
 
@@ -415,7 +430,7 @@ void request_join(char *line)
  * us a list of all available channels */
 void request_list()
 {
-	if (SSL_write(server_ssl, "/list", strlen("/list")) == -1) perror("/list");
+	if (SSL_write(server_ssl, LIST, strlen(LIST)) == -1) perror(LIST);
 }
 
 
@@ -453,7 +468,7 @@ void request_user()
  * us a list of all available users */
 void request_who()
 {
-	if (SSL_write(server_ssl, "/who", strlen("/who")) == -1) perror("/who");
+	if (SSL_write(server_ssl, WHO, strlen(WHO)) == -1) perror(WHO);
 }
 
 
@@ -489,8 +504,8 @@ void getpasswd(const char *prompt, char *passwd, size_t size)
 	// Write the prompt.
 	if (write (STDOUT_FILENO, prompt, strlen(prompt)) < 0) perror("write");
 	fsync(STDOUT_FILENO);
-	fgets(passwd, size, stdin);
-	
+	(void)(fgets(passwd, size, stdin) + 1);
+
 	// The result in passwd is '\0' terminated and may contain 
 	// a final '\n'. If it exists, we remove it.
 	if (passwd[strlen(passwd) -1] == '\n') passwd[strlen(passwd)-1] = '\0';

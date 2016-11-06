@@ -37,6 +37,10 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #include <openssl/conf.h>
 #include <ctype.h>
 
+
+
+
+
 /* Defines */
 
 /* Used to fool compiler with unused parameters */
@@ -54,8 +58,22 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 /* Metrics for clients */
 #define MAX_QUEUED 5
 
+/* Timer for select */
+#define NO_ACTION_TIME 60
+
 /* Name of initial channel */
-#define INIT_CHANNEL "LOBBY"
+#define INIT_CHANNEL "Lobby"
+
+/* Commands */
+#define BYE "/bye"
+#define QUIT "/quit"
+#define GAME "/game"
+#define JOIN "/join"
+#define LIST "/list"
+#define ROLL "/roll"
+#define SAY "/say"
+#define USER "/user"
+#define WHO "/who"
 
 
 
@@ -91,61 +109,96 @@ struct room_data
 	GTree *members;
 };
 
+
+
+
+
 /* Global variables */
 static GTree *client_collection;
 static GTree *room_collection;
 static SSL_CTX *ctx;
+int running = TRUE;
 
-void exit_error(char *msg);
+
+
+
 
 /* Initializers */
 void init_SSL();
 int init_server(int port);
 void init_chat_rooms();
 
-/* COMPARISON */
+/* Comparators */
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
 int chat_cmp(const void *name1, const void *name2);
 
-/* ADDING */
+/* Add to */
 void add_room(char *name);
 void add_client(int server_fd, SSL_CTX *ctx);
 
-/* MISC */
+/* Request handlers */
+void handle_who(SSL *ssl);
+void handle_list(SSL *ssl);
+void handle_join(struct client_data *client, char *buffer);
+
+/* Memory clean up */
 void free_client(struct client_data *client);
+
+/* Misc */
 void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
 void client_logger(struct client_data *client, int status);
+void exit_error(char *msg);
 
-/* ITERATION */
+/* Tree iterations */
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
 gboolean fd_set_all(gpointer key, gpointer val, gpointer data);
 gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 gboolean send_client_list(gpointer key, gpointer val, gpointer data);
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data);
 gboolean send_to_room(gpointer key, gpointer val, gpointer data);
-int find_chat_room();
 
-/* HANDLERS */
-void handle_who(SSL *ssl);
-void handle_list(SSL *ssl);
-void handle_join(struct client_data *client, char *buffer);
 
+
+
+
+/* Starting point */
 int main(int argc, char **argv)
 {
-	// TODO: COMMENT STEPS
-
+	// If sufficient arguments are not provided
 	if (argc < 2) exit_error("argument");
+
+	// Convert port to int
 	const int server_port = strtol(argv[1], NULL, 0);
+
+	// Message to user 
 	fprintf(stdout, "Starting server on port %d\n", server_port);
 	fflush(stdout);
+
+	// Initialize OpenSSL connection
 	init_SSL();
+
+	// Socket setup
 	int server_fd = init_server(server_port);
+
+	// Initialize collection for clients where (port, ip) pairs are keys
 	client_collection = g_tree_new(sockaddr_in_cmp);
+
+	// Initialize chat rooms
 	init_chat_rooms();
+
+	// Runs until interrupted
 	server_loop(server_fd);
+
+	// TODO:
+	// Destroy trees and clean all memory
+
 	exit(EXIT_SUCCESS);
 }
+
+
+
+
 
 /* Prints msg to standard error and exits with error code EXIT_FAILURE */
 void exit_error(char *msg)
@@ -154,92 +207,155 @@ void exit_error(char *msg)
 	exit(EXIT_FAILURE);
 }
 
-/* Sets up SSL and check if key matches.
- * All error results in termination.
- *
- * Parameters: SSL certificate */
+
+
+
+
+/* Sets up SSL and check if key matches. All error results in termination. */
 void init_SSL()
 {
-	//TODO: Comment steps
-
+	// Internal SSL init functions
 	SSL_library_init();
 	SSL_load_error_strings();
+
+	// Authentication
 	if ((ctx = SSL_CTX_new(TLSv1_method())) == NULL) exit_error("SSL CTX");
 	if (SSL_CTX_use_certificate_file(ctx, CERTIFICATE, SSL_FILETYPE_PEM) <= 0) exit_error("certificate");
 	if (SSL_CTX_use_PrivateKey_file(ctx, PRIVATE_KEY, SSL_FILETYPE_PEM) <= 0) exit_error("privatekey");
 	if (SSL_CTX_check_private_key(ctx) != 1) exit_error("match");
+
+	// Message to user
 	fprintf(stdout, "Access granted\n");
 	fflush(stdout);
 }
 
 
+
+
+
 /* Sets up socket and error checks while doing so. We allocate the
  * sockaddr_in struct's resources after this functions since we do
- * not need it elsewhere.
- *
- * Paramaters: port number of server
- * Return value: file descriptor of server */
+ * not need it elsewhere. Returns file descriptor of server */
 int init_server(int port)
 {
-	// TODO: Comment steps
-
+	// Setup socket
 	int socket_fd;
 	if ((socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) exit_error("socket");
+
+	// Init server struct
 	struct sockaddr_in server;
 	memset(&server, 0, sizeof(server));
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = htonl(INADDR_ANY);
 	server.sin_port = htons(port);
+
+	// Bind to port and listen
 	if (bind(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("bind");
 	if (listen(socket_fd, MAX_QUEUED) < 0) exit_error("listen");
+
+	// Message to user
 	fprintf(stdout, "Server setup complete\n");
 	fflush(stdout);
+
 	return socket_fd;
 }
 
-//TODO:comment
+
+
+
+
+/* Creates data structure for chats and creates the first
+ * channel that everyone will enter initially. */
 void init_chat_rooms()
 {
+	// Create new tree collection for chats with name comparatores. 
 	room_collection = g_tree_new(chat_cmp);
+
+	// Add lobby to structure
 	add_room(INIT_CHANNEL);
-	add_room("Gamers");
-	add_room("Study");
+
+	// Manually add (for debugging)
+	//add_room("chat room 1");
+	//add_room("chat room 2");
+	//add_room("chat room 3");
+	//add_room("chat room 4");
+	//add_room("chat room 5");
+	//add_room("chat room 6");
+	//add_room("chat room 7");
+	//add_room("chat room 8");
+	//add_room("chat room 9");
 }
 
+
+
+
+
+/* Add room to tree */
 void add_room(char *name)
 {
+	// Create a allocated struct for value and for its value,
+	// name and sub-tree. All three must be freed!
 	struct room_data *newChat = g_new0(struct room_data, 1);
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
+
+	// Add to tree 
 	g_tree_insert (room_collection, newChat->name, newChat->members);
 }
 
-/* Comparator for sockaddr to keep tree balanced */
+
+
+
+
+/* Comparator for sockaddr to keep tree balanced. Uses
+ * dictionary ordering on (addr, port) pairs. Returns
+ *    0 if equal
+ *    1 if addr1 > addr2
+ *   -1 if addr1 < addr2 */
 int sockaddr_in_cmp(const void *addr1, const void *addr2)
 {
-	// TODO: comment steps
-
 	const struct sockaddr_in *_addr1 = addr1;
 	const struct sockaddr_in *_addr2 = addr2;
+
+	// If IP 1 < IP 2
 	if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) return -1;
+	// if IP 1 > IP 2 
 	if (_addr1->sin_addr.s_addr > _addr2->sin_addr.s_addr) return 1;
+	// If port 1 < port 2
 	if (_addr1->sin_port < _addr2->sin_port) return -1;
+	// if port 2 < port 1
 	if (_addr1->sin_port > _addr2->sin_port) return 1;
+	// equals
 	return 0;
 }
 
-// Compare function for chat tree (since for some reason
-// it did not accept g_strcmp0 as an argument)
+
+
+
+
+/* Compare function for chat tree. Returns 
+ *    0 if equal,
+ *    1 if name1 > name2, 
+ *    -1 if nam1 < name2. */
 int chat_cmp(const void *name1, const void *name2)
 {
-	return g_strcmp0(name1, name2);
+	return g_strcmp0((char *)name1, (char *)name2);
 }
 
-// TODO: Comment
+
+
+
+
+/* Free client completely from server. Frees memory in all
+ * collections and closes connection*/
 void free_client(struct client_data *client)
 {
-	// TODO: comment steps
-
+	// TODO: comment steps 
+ 	//////////////////////////////////////////////////////////////////////////////
+ 	//////////////////////////////////////////////////////////////////////////////
+ 	////////////////////////////////////////////////////////////////////////////// <---- gera aftur... !
+ 	//////////////////////////////////////////////////////////////////////////////
+ 	//////////////////////////////////////////////////////////////////////////////
 	client_logger(client, LOG_DISCONNECTED);
 	close(client->fd);
 	SSL_shutdown(client->ssl);
@@ -248,70 +364,76 @@ void free_client(struct client_data *client)
 	g_free(client);
 }
 
+
+
+
+
 /* Main loop of server */
 void server_loop(int server_fd)
 {
-	// TODO: comment steps
-
-	while (1)
+	// Loop indefinitely
+	while (running)
 	{
+		// Wait for request
 		fd_set rfds;
 		int r = SELECT(&rfds, server_fd);
 		if (r < 0)
 		{
+			// If select returns an error, we close the client
+			// unless EINTR error, then we skip the iteration
 			if (errno == EINTR) continue;
 			perror("select()");
 			break;
 		}
 		if (r == 0)
 		{
-			fprintf(stdout, "nothing for 30s\n");
+			fprintf(stdout, "nothing for %ds\n", NO_ACTION_TIME);
 			fflush(stdout);
 		}
 
+		// If new client awaits
 		if (FD_ISSET(server_fd, &rfds)) add_client(server_fd, ctx);
+
+		// Handle all existing clients
 		g_tree_foreach(client_collection, responde_to_client, &rfds);
 	}
 }
 
-/* A wrapped version select, that handles attinional logic. */
+
+
+
+
+/* A wrapped version select, that handles attinional logic. 
+ * Returns the return value of select() */
 int SELECT(fd_set *rfds, int server_fd)
 {
-	// TODO: comment steps
-
+	// Restart pool
 	FD_ZERO(rfds);
+
+	// Add file descriptors to pool
 	FD_SET(server_fd, rfds);
 	int max_fd = server_fd;
+
+	// Find the largests file descriptor
 	g_tree_foreach(client_collection, get_max_fd, &max_fd);
+
+	// Add all existing clients to the pool
 	g_tree_foreach(client_collection, fd_set_all, rfds);
+	
+	// Set inactive time
 	struct timeval tv;
-	tv.tv_sec = 30;
+	tv.tv_sec = NO_ACTION_TIME;
 	tv.tv_usec = 0;
+	
 	return select(max_fd + 1, rfds, NULL, NULL, &tv);
-
 }
 
-/* Iterates through the tree of clients, finding the largest
- * file descriptor and passing it back through data. */
-gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
-{
-	UNUSED(key);
-	int this_fd = ((struct client_data *)val)->fd;
-	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
-	return FALSE;
-}
 
-/* Adds every current client's file descriptor to the
- * pool of fd's that are checked for requests */
-gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
-{
-	UNUSED(key);
-	FD_SET(((struct client_data *)val)->fd, (fd_set *)data);
-	return FALSE;
-}
+
+
 
 /* Add client to server. Will be added to the tree and greeted
- * with a message.  */
+ * with a message. */
 void add_client(int server_fd, SSL_CTX *ctx)
 {
 	// TODO: comment steps
@@ -344,13 +466,17 @@ void add_client(int server_fd, SSL_CTX *ctx)
 
 	client->room = g_strdup(INIT_CHANNEL);
 	g_tree_insert(client_collection, &client->addr, client);
-	GTree *tree = g_tree_search(room_collection, find_chat_room, "LOBBY");
+	GTree *tree = g_tree_search(room_collection, chat_cmp, "LOBBY");
 	g_tree_insert(tree, &client->addr, client);
 	//client->room = "LOBBY";
 	if (SSL_write(client->ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
 	client_logger(client, LOG_CONNECTED);
 
 }
+
+
+
+
 
 /* Time stamp on client action, in local file system */
 void client_logger(struct client_data *client, int status)
@@ -389,6 +515,103 @@ void client_logger(struct client_data *client, int status)
 	fclose(tof);
 }
 
+
+
+
+
+// TODO: COMMENT
+void handle_who(SSL *ssl)
+{
+	if(SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
+	GString * buffer = g_string_new(NULL);
+	g_tree_foreach(client_collection, send_client_list, buffer);
+	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
+	g_string_free(buffer, TRUE);
+}
+
+
+
+
+
+// TODO: COMMENT:
+void handle_list(SSL *ssl)
+{
+	GString *buffer = g_string_new(NULL);
+	GString *message = g_string_new("\n\nList of chatrooms:");
+	fprintf(stdout, "%d\n", g_tree_nnodes(room_collection));
+	g_tree_foreach(room_collection, send_chat_rooms, buffer);
+	message = g_string_append (message, buffer->str);
+	message = g_string_append (message, "\n");
+	if(SSL_write(ssl, message->str, message->len) < 0) perror("SSL write");
+	g_string_free(buffer, TRUE);
+	g_string_free(message, TRUE);
+}
+
+
+
+
+
+// TODO: COMMENT
+void handle_join(struct client_data *client, char *buffer)
+{
+	char *room_name = g_strchomp(&buffer[6]);
+	GTree *tree;
+
+	if((tree = g_tree_search(room_collection, chat_cmp, room_name)) == NULL)
+	{
+		add_room(room_name);
+	}
+		tree = g_tree_search(room_collection, chat_cmp, client->room);
+
+		if(tree != NULL)
+		{
+			fprintf(stdout, "%s\n","Tree ready");
+			fflush(stdout);
+		}
+
+		if(g_tree_remove(tree, &client->addr) == FALSE)
+		{
+			fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
+		}
+
+		tree = g_tree_search(room_collection, chat_cmp, room_name);
+		g_tree_insert (tree, &client->addr, client);
+		client->room = strdup(room_name);
+}
+
+
+
+
+
+/* Iterates through the tree of clients, finding the largest
+ * file descriptor and passing it back through data. Return
+ * value is irrelivant. */
+gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	int this_fd = ((struct client_data *)val)->fd;
+	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
+	return FALSE;
+}
+
+
+
+
+
+/* Adds every current client's file descriptor to the
+ * pool of fd's that are checked for requests. Return
+ * value is irrelivant. */
+gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	FD_SET(((struct client_data *)val)->fd, (fd_set *)data);
+	return FALSE;
+}
+
+
+
+
+
 // TODO: COMMENT
 gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 {
@@ -407,36 +630,16 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
 			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
 			// TODO: ADD more handling else-if-s and corresponding methods
-			else g_tree_foreach(g_tree_search(room_collection, find_chat_room, client->room), send_to_room, buff);
+			else g_tree_foreach(g_tree_search(room_collection, chat_cmp, client->room), send_to_room, buff);
 		}
 		else free_client(client);
 	}
 	return FALSE;
 }
 
-// TODO: COMMENT
-void handle_who(SSL *ssl)
-{
-	if(SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
-	GString * buffer = g_string_new(NULL);
-	g_tree_foreach(client_collection, send_client_list, buffer);
-	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
-	g_string_free(buffer, TRUE);
-}
 
-// TODO: COMMENT:
-void handle_list(SSL *ssl)
-{
-	GString *buffer = g_string_new(NULL);
-	GString *message = g_string_new("\n\nList of chatrooms:");
-	fprintf(stdout, "%d\n", g_tree_nnodes(room_collection));
-	g_tree_foreach(room_collection, send_chat_rooms, buffer);
-	message = g_string_append (message, buffer->str);
-	message = g_string_append (message, "\n");
-	if(SSL_write(ssl, message->str, message->len) < 0) perror("SSL write");
-	g_string_free(buffer, TRUE);
-	g_string_free(message, TRUE);
-}
+
+
 
 // TODO Comment
 gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
@@ -449,44 +652,9 @@ gboolean send_chat_rooms(gpointer key, gpointer val, gpointer data)
 	return FALSE;
 }
 
-// TODO: COMMENT
-void handle_join(struct client_data *client, char *buffer)
-{
-	char *room_name = g_strchomp(&buffer[6]);
-	GTree *tree;
 
-	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL)
-	{
-		add_room(room_name);
-	}
-		tree = g_tree_search(room_collection, find_chat_room, client->room);
 
-		if(tree != NULL)
-		{
-			fprintf(stdout, "%s\n","Tree ready");
-			fflush(stdout);
-		}
 
-		if(g_tree_remove(tree, &client->addr) == FALSE)
-		{
-			fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
-		}
-
-		tree = g_tree_search(room_collection, find_chat_room, room_name);
-		g_tree_insert (tree, &client->addr, client);
-		client->room = strdup(room_name);
-}
-
-//TODO: COMMENT
-int find_chat_room(const void *name1, const void *name2)
-{
-		const char *first = name1;
-		const char *second = name2;
-		int x = g_strcmp0(first, second);
-		if (x > 0) return -1;
-		if (x < 0) return 1;
-		return 0;
-}
 
 // TODO: COMMENT
 gboolean send_client_list(gpointer key, gpointer val, gpointer data)
@@ -523,6 +691,10 @@ gboolean send_client_list(gpointer key, gpointer val, gpointer data)
 	g_free(port);
 	return FALSE;
 }
+
+
+
+
 
 gboolean send_to_room(gpointer key, gpointer val, gpointer data)
 {
