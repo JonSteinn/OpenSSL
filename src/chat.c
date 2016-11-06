@@ -313,7 +313,7 @@ int SELECT(fd_set *rfds, int server_fd)
 	// Restart pool
 	FD_ZERO(rfds);
 
-	// Add file descriptors to ppol
+	// Add file descriptors to pool
 	FD_SET(server_fd, rfds);
 	FD_SET(STDIN_FILENO, rfds);
 
