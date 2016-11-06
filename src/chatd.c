@@ -83,6 +83,9 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #define TIME_SIZE 25
 
 
+
+
+
 /* Data structure for clients. It includes the following fields:
  *   (identifier, type, description)
  *   1: fd, int, file descriptor
@@ -135,6 +138,7 @@ void init_chat_rooms();
 /* Comparators */
 int sockaddr_in_cmp(const void *addr1, const void *addr2);
 int chat_cmp(const void *name1, const void *name2);
+int find_chat_room(const void *name1, const void *name2);
 
 /* Add to */
 void add_room(char *name);
@@ -278,8 +282,6 @@ void init_chat_rooms()
 
 	// Add lobby to structure
 	add_room(INIT_CHANNEL);
-	
-	add_room("channel"); /////////////////////////////////////////////////////////////////////////HENDA!!!!!!!!!!!!!!!!!!!
 
 	// Manually add (for debugging)
 	//add_room("chat room 1");
@@ -291,6 +293,7 @@ void init_chat_rooms()
 	//add_room("chat room 7");
 	//add_room("chat room 8");
 	//add_room("chat room 9");
+
 }
 
 
@@ -300,6 +303,10 @@ void init_chat_rooms()
 /* Add room to tree */
 void add_room(char *name)
 {
+	/////////////////////////////////////////////////////////
+	// TODO: Struct memory is leaking, do we even need it? //
+	/////////////////////////////////////////////////////////
+
 	// Create a allocated struct for value and for its value,
 	// name and sub-tree. All three must be freed!
 	struct room_data *newChat = g_new0(struct room_data, 1);
@@ -367,7 +374,7 @@ void free_client(struct client_data *client)
 
 	// Remove user from channel's list of users without freeing memory
 	char *channel = client->room;
-	g_tree_remove(g_tree_search(room_collection, chat_cmp, channel), &client->addr);
+	g_tree_remove(g_tree_search(room_collection, find_chat_room, channel), &client->addr);
 
 	// Free memory
 	g_free(client->name);
@@ -408,6 +415,10 @@ void server_loop(int server_fd)
 
 		// Handle all existing client's requests
 		g_tree_foreach(client_collection, responde_to_client, &rfds);
+
+		///////////////////////////////////////////////////////////////////////////
+		// TODO: Foreach chat room (other than lobby), remove and clean if empty //
+		///////////////////////////////////////////////////////////////////////////
 	}
 }
 
@@ -492,7 +503,7 @@ void add_client(int server_fd, SSL_CTX *ctx)
 	// That will result in us only freeing the one from the client collection when he 
 	// leaves and for the others, we just need to remove from tree so they do not have an
 	// address to random memory. The same goes when switching channels.
-	g_tree_insert(g_tree_search(room_collection, chat_cmp, INIT_CHANNEL), &client->addr, client);
+	g_tree_insert(g_tree_search(room_collection, find_chat_room, INIT_CHANNEL), &client->addr, client);
 	
 	// Greeting message sent to client
 	if (SSL_write(client->ssl, GREET, strlen(GREET)) < 0) perror("SSL write");
@@ -500,6 +511,26 @@ void add_client(int server_fd, SSL_CTX *ctx)
 	// Log users connection
 	client_logger(client, LOG_CONNECTED);
 
+}
+
+
+
+
+
+///////////////////
+// TODO: COMMENT //
+///////////////////
+int find_chat_room(const void *name1, const void *name2)
+{
+	///////////////////
+	// TODO: COMMENT //
+	///////////////////
+	const char *first = name1;
+	const char *second = name2;
+	int x = g_strcmp0(first, second);
+	if (x > 0) return -1;
+	if (x < 0) return 1;
+	return 0;
 }
 
 
@@ -616,16 +647,25 @@ void handle_list(SSL *ssl)
  * not exist, we create it but.  */
 void handle_join(struct client_data *client, char *buffer)
 {
-	/////////////////////
-	// TODO /////////////
-	/////////////////////
-	// Testing needed to this can be considered implemented
-	// i. Total 1 clients, leave lobby to a already existing channel
-	// ii. Total 1 clients, leave lobby to a non-existing channel
-	// iii. Total 1. clients, leave a session-make channel to some else
-	// iv. Total 2 clients, make both join a premade channel, speak
-	// v. Total 2 clients, make both join a non-existing channel, speak
+	///////////////////////////
+	// TODO: FIX MEMORY LEAK //
+	///////////////////////////
 
+	char *room_name = g_strchomp(&buffer[6]);
+	GTree *tree;
+	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL) add_room(room_name); 
+	tree = g_tree_search(room_collection, find_chat_room, client->room);
+	if(tree != NULL)
+	{
+		fprintf(stdout, "%s\n","Tree ready");
+		fflush(stdout);
+	}
+	else exit_error("TREE IS NULL FFS!");
+	if(g_tree_remove(tree, &client->addr) == FALSE) fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
+
+	tree = g_tree_search(room_collection, find_chat_room, room_name);
+	g_tree_insert (tree, &client->addr, client);
+	client->room = strdup(room_name);
 }
 
 
@@ -661,7 +701,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			/////////////////////////////////////////////////////////////////
 			// TODO: ADD more handling else-if-s and corresponding methods //
 			/////////////////////////////////////////////////////////////////
-			else g_tree_foreach(g_tree_search(room_collection, chat_cmp, client->room), send_to_room, buff);
+			else g_tree_foreach(g_tree_search(room_collection, find_chat_room, client->room), send_to_room, buff);
 		}
 		else free_client(client); // Assumed dead
 	}
