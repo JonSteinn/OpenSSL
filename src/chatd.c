@@ -75,7 +75,8 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #define USER "/user"
 #define WHO "/who"
 
-
+/* Messages */
+#define GREET "WELCOME"
 
 
 
@@ -300,7 +301,7 @@ void add_room(char *name)
 	newChat->members = g_tree_new(sockaddr_in_cmp);
 
 	// Add to tree 
-	g_tree_insert (room_collection, newChat->name, newChat->members);
+	g_tree_insert(room_collection, newChat->name, newChat->members);
 }
 
 
@@ -350,16 +351,24 @@ int chat_cmp(const void *name1, const void *name2)
  * collections and closes connection*/
 void free_client(struct client_data *client)
 {
-	// TODO: comment steps 
- 	//////////////////////////////////////////////////////////////////////////////
- 	//////////////////////////////////////////////////////////////////////////////
- 	////////////////////////////////////////////////////////////////////////////// <---- gera aftur... !
- 	//////////////////////////////////////////////////////////////////////////////
- 	//////////////////////////////////////////////////////////////////////////////
+	// Log client' departure
 	client_logger(client, LOG_DISCONNECTED);
+
+	// Close connection and free connection resoures
 	close(client->fd);
 	SSL_shutdown(client->ssl);
 	SSL_free(client->ssl);
+
+	// Remove user from channel's list of users without freeing memory
+	char *channel = client->room;
+	g_tree_remove(g_tree_search(room_collection, chat_cmp, channel), &client->addr);
+	
+	// TODO:
+	// IF CHANNEL IS EMPTY AND NOT == LOBBY, THEN REMOVE CHANNEL TOO
+
+	// Free memory
+	g_free(client->name);
+	g_free(channel);
 	g_tree_remove(client_collection, &client->addr);
 	g_free(client);
 }
@@ -432,44 +441,60 @@ int SELECT(fd_set *rfds, int server_fd)
 
 
 
-/* Add client to server. Will be added to the tree and greeted
- * with a message. */
+/* Add client to server. */
 void add_client(int server_fd, SSL_CTX *ctx)
 {
-	// TODO: comment steps
+	// Allocate memory for tree entry
 	struct client_data *client = g_new0(struct client_data, 1);
 	socklen_t scklen = (socklen_t)sizeof(client->addr);
 
+	// Create connection
 	if ((client->fd = accept(server_fd, (struct sockaddr *)&client->addr, &scklen)) < 0)
 	{
-		perror("accept");
+		perror("accept()");
+		g_free(client);
 		return;
 	}
 	if ((client->ssl = SSL_new(ctx)) == NULL)
 	{
 		perror("SSL");
+		g_free(client);
 		return;
 	}
 	if (SSL_set_fd(client->ssl, client->fd) == 0)
 	{
 		perror("SSL fd");
+		g_free(client);
 		return;
 	}
 	if (SSL_accept(client->ssl) < 0)
 	{
-		perror("SSL accept");
+		perror("SSL accept()");
+		g_free(client);
 		return;
 	}
 
+	// Message to user
 	fprintf(stdout, "New client! FD = %d\n", client->fd);
 	fflush(stdout);
 
+	// Set room and name with allocated memory
 	client->room = g_strdup(INIT_CHANNEL);
+	client->name = g_strdup("NONE");
+
+	// Add client to client collection
 	g_tree_insert(client_collection, &client->addr, client);
-	GTree *tree = g_tree_search(room_collection, chat_cmp, "LOBBY");
-	g_tree_insert(tree, &client->addr, client);
-	//client->room = "LOBBY";
-	if (SSL_write(client->ssl, "WELCOME", strlen("WELCOME")) < 0) perror("SSL write");
+
+	// Add client to Lobby tree. Notice that we are using the same memory for both trees!
+	// That will result in us only freeing the one from the client collection when he 
+	// leaves and for the others, we just need to remove from tree so they do not have an
+	// address to random memory. The same goes when switching channels.
+	g_tree_insert(g_tree_search(room_collection, chat_cmp, INIT_CHANNEL), &client->addr, client);
+	
+	// Greeting message sent to client
+	if (SSL_write(client->ssl, GREET, strlen(GREET)) < 0) perror("SSL write");
+	
+	// Log users connection
 	client_logger(client, LOG_CONNECTED);
 
 }
@@ -478,12 +503,13 @@ void add_client(int server_fd, SSL_CTX *ctx)
 
 
 
-/* Time stamp on client action, in local file system */
+/* Time stamp on client action, in local file system. */
 void client_logger(struct client_data *client, int status)
 {
-	// TODO: Comment steps
-
+	// Convert ip to string
 	char *ip = inet_ntoa(client->addr.sin_addr);
+
+	// Convert port to short
 	uint16_t port = client->addr.sin_port;
 
 	// Set ISO time
@@ -499,9 +525,11 @@ void client_logger(struct client_data *client, int status)
 	FILE *tof;
 	if((tof = fopen("chat.log", "a")) == NULL)
 	{
-	        fprintf(stdout, "%s\n","Log error");
+	        perror("Log");
 	        return;
 	}
+
+	// Formatting
 	fwrite("<", 1, 1, tof);
 	fwrite(timestamp, 1, strlen(timestamp), tof);
 	fwrite("> : <", 1, 5, tof);
@@ -509,8 +537,12 @@ void client_logger(struct client_data *client, int status)
 	fwrite("> : <", 1, 5, tof);
 	fprintf(tof, "%d",port );
 	fwrite(">", 1, 2, tof);
+
+	// Set status
 	if (status == LOG_CONNECTED) fwrite(" : <CONNECTED>\n", 1, 15, tof);
 	else if (status == LOG_DISCONNECTED) fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
+
+	// Release resources
 	fflush(tof);
 	fclose(tof);
 }
@@ -519,13 +551,22 @@ void client_logger(struct client_data *client, int status)
 
 
 
-// TODO: COMMENT
+/* Create responses for /who requests */
 void handle_who(SSL *ssl)
 {
-	if(SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
-	GString * buffer = g_string_new(NULL);
+	// Send header to client
+	if (SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
+	
+	// Create an empty string that handles memory allocation during appending.
+	GString *buffer = g_string_new(NULL);
+
+	// Pass string to foreach method that appends users to it
 	g_tree_foreach(client_collection, send_client_list, buffer);
-	if(SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
+
+	// Send list of clients (including self) to requesting client
+	if (SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
+	
+	// Release string resources
 	g_string_free(buffer, TRUE);
 }
 
@@ -533,7 +574,7 @@ void handle_who(SSL *ssl)
 
 
 
-// TODO: COMMENT:
+/* */
 void handle_list(SSL *ssl)
 {
 	GString *buffer = g_string_new(NULL);
@@ -551,7 +592,7 @@ void handle_list(SSL *ssl)
 
 
 
-// TODO: COMMENT
+/* */
 void handle_join(struct client_data *client, char *buffer)
 {
 	char *room_name = g_strchomp(&buffer[6]);
@@ -583,35 +624,6 @@ void handle_join(struct client_data *client, char *buffer)
 
 
 
-/* Iterates through the tree of clients, finding the largest
- * file descriptor and passing it back through data. Return
- * value is irrelivant. */
-gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
-{
-	UNUSED(key);
-	int this_fd = ((struct client_data *)val)->fd;
-	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
-	return FALSE;
-}
-
-
-
-
-
-/* Adds every current client's file descriptor to the
- * pool of fd's that are checked for requests. Return
- * value is irrelivant. */
-gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
-{
-	UNUSED(key);
-	FD_SET(((struct client_data *)val)->fd, (fd_set *)data);
-	return FALSE;
-}
-
-
-
-
-
 // TODO: COMMENT
 gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 {
@@ -634,6 +646,35 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 		}
 		else free_client(client);
 	}
+	return FALSE;
+}
+
+
+
+
+
+/* Iterates through the tree of clients, finding the largest
+ * file descriptor and passing it back through data. Return
+ * value is irrelivant. */
+gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	int this_fd = ((struct client_data *)val)->fd;
+	if (this_fd > *((int *)data)) *((int *)data) = this_fd;
+	return FALSE;
+}
+
+
+
+
+
+/* Adds every current client's file descriptor to the
+ * pool of fd's that are checked for requests. Return
+ * value is irrelivant. */
+gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+	FD_SET(((struct client_data *)val)->fd, (fd_set *)data);
 	return FALSE;
 }
 
