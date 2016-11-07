@@ -1,8 +1,8 @@
 /***********************************************
-   __________     ____                    
+   __________     ____
   / __/ __/ /    / __/__ _____  _____ ____
  _\ \_\ \/ /__  _\ \/ -_) __/ |/ / -_) __/
-/___/___/____/ /___/\__/_/  |___/\__/_/   
+/___/___/____/ /___/\__/_/  |___/\__/_/
 
 ************************************************
 JON STEINN ELIASSON   - JONSTEINN@GMAIL.COM
@@ -42,7 +42,7 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 /* Used to fool compiler with unused parameters */
 #define UNUSED(x) (void)(x)
 
-/* Paths to file. These are relative to the root of the project. 
+/* Paths to file. These are relative to the root of the project.
  * By adding '../' in front, one can run from '/src'. */
 #define CERTIFICATE "encryption/fd.crt"
 #define PRIVATE_KEY "encryption/fd.key"
@@ -104,7 +104,7 @@ struct client_data
  *   (identifier, type, description)
  *   1: name, char *, name of channel
  *   2: members, GTree *, collection of clients
- * Each chat room has a tree of the user it contains. Initially, one 
+ * Each chat room has a tree of the user it contains. Initially, one
  * one channel exists. */
 struct room_data
 {
@@ -143,7 +143,9 @@ void add_client(int server_fd, SSL_CTX *ctx);
 /* Request handlers */
 void handle_who(SSL *ssl);
 void handle_list(SSL *ssl);
+void handle_say(char *sender, char *buffer);
 void handle_join(struct client_data *client, char *buffer);
+void handle_user(struct client_data *client, char *buffer);
 
 /* Memory clean up */
 void free_client(struct client_data *client);
@@ -161,6 +163,7 @@ gboolean responde_to_client(gpointer key, gpointer value, gpointer data);
 gboolean append_client_list(gpointer key, gpointer val, gpointer data);
 gboolean append_chat_rooms(gpointer key, gpointer val, gpointer data);
 gboolean send_to_room(gpointer key, gpointer val, gpointer data);
+gboolean find_user_by_name(gpointer key, gpointer val, gpointer data);
 
 
 
@@ -175,7 +178,7 @@ int main(int argc, char **argv)
 	// Convert port to int
 	const int server_port = strtol(argv[1], NULL, 0);
 
-	// Message to user 
+	// Message to user
 	fprintf(stdout, "Starting server on port %d\n", server_port);
 	fflush(stdout);
 
@@ -273,7 +276,7 @@ int init_server(int port)
  * channel that everyone will enter initially. */
 void init_chat_rooms()
 {
-	// Create new tree collection for chats with name comparatores. 
+	// Create new tree collection for chats with name comparatores.
 	room_collection = g_tree_new(chat_cmp);
 
 	// Add lobby to structure
@@ -309,7 +312,7 @@ void add_room(char *name)
 	newChat->name = g_strdup(name);
 	newChat->members = g_tree_new(sockaddr_in_cmp);
 
-	// Add to tree 
+	// Add to tree
 	g_tree_insert(room_collection, newChat->name, newChat->members);
 }
 
@@ -329,7 +332,7 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 
 	// If IP 1 < IP 2
 	if (_addr1->sin_addr.s_addr < _addr2->sin_addr.s_addr) return -1;
-	// if IP 1 > IP 2 
+	// if IP 1 > IP 2
 	if (_addr1->sin_addr.s_addr > _addr2->sin_addr.s_addr) return 1;
 	// If port 1 < port 2
 	if (_addr1->sin_port < _addr2->sin_port) return -1;
@@ -343,9 +346,9 @@ int sockaddr_in_cmp(const void *addr1, const void *addr2)
 
 
 
-/* Compare function for chat tree. Returns 
+/* Compare function for chat tree. Returns
  *    0 if equal,
- *    1 if name1 > name2, 
+ *    1 if name1 > name2,
  *    -1 if nam1 < name2. */
 int chat_cmp(const void *name1, const void *name2)
 {
@@ -422,7 +425,7 @@ void server_loop(int server_fd)
 
 
 
-/* A wrapped version select, that handles attinional logic. 
+/* A wrapped version select, that handles attinional logic.
  * Returns the return value of select() */
 int SELECT(fd_set *rfds, int server_fd)
 {
@@ -438,12 +441,12 @@ int SELECT(fd_set *rfds, int server_fd)
 
 	// Add all existing clients to the pool
 	g_tree_foreach(client_collection, fd_set_all, rfds);
-	
+
 	// Set inactive time
 	struct timeval tv;
 	tv.tv_sec = NO_ACTION_TIME;
 	tv.tv_usec = 0;
-	
+
 	return select(max_fd + 1, rfds, NULL, NULL, &tv);
 }
 
@@ -496,14 +499,14 @@ void add_client(int server_fd, SSL_CTX *ctx)
 	g_tree_insert(client_collection, &client->addr, client);
 
 	// Add client to Lobby tree. Notice that we are using the same memory for both trees!
-	// That will result in us only freeing the one from the client collection when he 
+	// That will result in us only freeing the one from the client collection when he
 	// leaves and for the others, we just need to remove from tree so they do not have an
 	// address to random memory. The same goes when switching channels.
 	g_tree_insert(g_tree_search(room_collection, find_chat_room, INIT_CHANNEL), &client->addr, client);
-	
+
 	// Greeting message sent to client
 	if (SSL_write(client->ssl, GREET, strlen(GREET)) < 0) perror("SSL write");
-	
+
 	// Log users connection
 	client_logger(client, LOG_CONNECTED);
 
@@ -590,7 +593,7 @@ void handle_who(SSL *ssl)
 
 	// Send header to client
 	if (SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
-	
+
 	// Create an empty string that handles memory allocation during appending.
 	GString *buffer = g_string_new(NULL);
 
@@ -599,9 +602,50 @@ void handle_who(SSL *ssl)
 
 	// Send list of clients (including self) to requesting client
 	if (SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
-	
+
 	// Release string resources
 	g_string_free(buffer, TRUE);
+}
+
+
+
+
+
+/* Responds to clients requesting a private message to another user.
+ * If the user does not exist(or has no nickname), the client will
+ * be notified.  */
+void handle_say(char *sender, char *buff)
+{
+
+	///////////////////////////////////////////////
+	// TODO: NOTIFY CLIENT IF USER DOES NOT EXIST//
+	//       CHECK FOR MEMORY LEAK               //
+	///////////////////////////////////////////////
+	// Initialize data types
+	char *receiver;
+	char *message;
+
+	/* Parse through the buffer and find the receiver
+	 * of the message and the message to send */
+	int i = 4;
+	while (buff[i] != '\0' && isspace(buff[i])) {i++;}
+	int j = i+1;
+	while (buff[j] != '\0' && isgraph(buff[j])) {j++;}
+
+	receiver = strndup(&(buff[i]), j - i);
+	message = g_strchomp(&buff[i+strlen(receiver)+1]);
+
+	// Create a list and insert the receiver, sender and the message
+	GList *list = NULL;
+	list = g_list_append(list, receiver);
+	list = g_list_append(list, sender);
+	list = g_list_append(list, message);
+
+	// Find the user by name and send the private message
+	g_tree_foreach(client_collection, find_user_by_name, list);
+
+	// Free string resources
+	free(receiver);
 }
 
 
@@ -620,18 +664,14 @@ void handle_list(SSL *ssl)
 	GString *buffer = g_string_new("\n\nList of chat rooms:");
 
 	// A string for foreach-method appending
-	GString *chats = g_string_new(NULL);
-	g_tree_foreach(room_collection, append_chat_rooms, chats);
-	
-	// Add gathered data to buffer
-	buffer = g_string_append (buffer, chats->str);
-	buffer = g_string_append (buffer, "\n");
-	
+	g_tree_foreach(room_collection, append_chat_rooms, buffer);
+	buffer = g_string_append(buffer, "\n");
+
 	// Send list of channels (including his current) to requesting client
 	if (SSL_write(ssl, buffer->str, buffer->len) < 0) perror("SSL write");
-	
+
 	// Release string resources
-	g_string_free(chats, TRUE);
+
 	g_string_free(buffer, TRUE);
 }
 
@@ -649,7 +689,7 @@ void handle_join(struct client_data *client, char *buffer)
 
 	char *room_name = g_strchomp(&buffer[6]);
 	GTree *tree;
-	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL) add_room(room_name); 
+	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL) add_room(room_name);
 	tree = g_tree_search(room_collection, find_chat_room, client->room);
 	if(tree != NULL)
 	{
@@ -668,8 +708,24 @@ void handle_join(struct client_data *client, char *buffer)
 
 
 
+// Sets the user name of the client
+void handle_user(struct client_data *client, char *buffer)
+{
+	// Free the value from memory
+	g_free(client->name);
+
+	// Get the new name from buffer
+	char *name = g_strchomp(&buffer[6]);
+
+	// Set the new name
+	client->name = strdup(name);
+}
+
+
+
+
 /* Iteration-bound. Runs through the tree of clients, and for those
- * who "have something to say", we process the request. Return value 
+ * who "have something to say", we process the request. Return value
  * is irrelivant. */
 gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 {
@@ -678,14 +734,14 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 
 	// Each client
 	struct client_data *client = (struct client_data *)val;
-	
+
 	// If client has something to say
 	if (FD_ISSET(client->fd, (fd_set *)data))
 	{
-		// Clean buffer 
+		// Clean buffer
 		char buff[MESSAGE_SIZE];
 		memset(buff,0, sizeof(buff));
-	
+
 		// If read is successfull
 		if (SSL_read(client->ssl, buff, sizeof(buff) - 1) > 0)
 		{
@@ -694,6 +750,8 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			else if (strncmp(buff, "/bye", 4) == 0) free_client(client);
 			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
 			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
+			else if (strncmp(buff, "/say", 4) == 0) handle_say(client->name, buff);
+			else if (strncmp(buff, "/user", 5) == 0) handle_user(client, buff);
 			/////////////////////////////////////////////////////////////////
 			// TODO: ADD more handling else-if-s and corresponding methods //
 			/////////////////////////////////////////////////////////////////
@@ -708,8 +766,8 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 
 
 
-/* Iteration-bound. Runs through the tree of clients, finding 
- * the largest file descriptor and passing it back through data. 
+/* Iteration-bound. Runs through the tree of clients, finding
+ * the largest file descriptor and passing it back through data.
  * Return value is irrelivant. */
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
 {
@@ -727,7 +785,7 @@ gboolean get_max_fd(gpointer key, gpointer val, gpointer data)
 
 
 
-/* Iteration-bound. Adds every current client's file descriptor 
+/* Iteration-bound. Adds every current client's file descriptor
  * to the pool of fd's that are checked for requests. Return
  * value is irrelivant. */
 gboolean fd_set_all(gpointer key, gpointer val, gpointer data)
@@ -752,7 +810,7 @@ gboolean append_chat_rooms(gpointer key, gpointer val, gpointer data)
 	// Avoid compiler warnings
 	UNUSED(val);
 
-	// Append user to string	
+	// Append user to string
 	GString *buffer = (GString *)data;
 	buffer = g_string_append(buffer, "\n");
 	buffer = g_string_append(buffer, (char *)key);
@@ -764,7 +822,7 @@ gboolean append_chat_rooms(gpointer key, gpointer val, gpointer data)
 
 
 
-/* Iteration-bound. Adds each client name to a string. 
+/* Iteration-bound. Adds each client name to a string.
  * Return value is irrelivant. */
 gboolean append_client_list(gpointer key, gpointer val, gpointer data)
 {
@@ -784,11 +842,11 @@ gboolean append_client_list(gpointer key, gpointer val, gpointer data)
 	if (client->name == NULL){}
 	else buffer = g_string_append(buffer, client->name);
 
-	// Add chat to buffer	
+	// Add chat to buffer
 	buffer = g_string_append(buffer, "\nChat room: ");
 	if (client->room == NULL) buffer = g_string_append(buffer, "No Room");
 	else buffer = g_string_append(buffer, client->room);
-	
+
 	// Formatting
 	buffer = g_string_append(buffer, "\nIP: ");
 	buffer = g_string_append(buffer, ip);
@@ -806,7 +864,7 @@ gboolean append_client_list(gpointer key, gpointer val, gpointer data)
 
 
 
-/* Iteration-bound. Sends message to everyone in a specific 
+/* Iteration-bound. Sends message to everyone in a specific
  * channel. Return value is irrelivant. */
 gboolean send_to_room(gpointer key, gpointer val, gpointer data)
 {
@@ -815,9 +873,59 @@ gboolean send_to_room(gpointer key, gpointer val, gpointer data)
 
 	// Send message to current client (in a iteration).
 	if (SSL_write(((struct client_data *)val)->ssl, data, strlen(data)) < 0) perror("SSL write");
-	
+
 	return FALSE;
 }
+
+
+
+
+
+/* Iterates through a a collection of users. If the name of the user
+ * is found, a private message it sent to that user. */
+gboolean find_user_by_name(gpointer key, gpointer val, gpointer data)
+{
+	// Avoid compiler warnings
+	UNUSED(key);
+
+	// Initialize data types
+	struct client_data *client = val;
+	GList *list = data;
+
+	// Get the name of the user supposed to receive the message
+	char *receiver = g_list_nth_data(list, 0);
+
+	// If the receiver is found in the collection
+	if(strcmp (client->name, receiver) == 0)
+	{
+		/* Get the  data from the list and make a private
+		 * message prompt */
+		char *sender = g_list_nth_data(list, 1);
+		char *message = g_list_nth_data(list, 2);
+		char *private = "<private> : ";
+
+		// A string to hold the message
+		GString *string = g_string_new(sender);
+
+		// Append all information to the string
+		g_string_append(string, " ");
+		g_string_append(string, private);
+		g_string_append(string, message);
+
+		// Send a privat message in the format sender <private> message
+		SSL_write(client->ssl, string->str, string->len);
+
+		// Release resources
+		g_string_free(string, TRUE);
+	}
+
+	return FALSE;
+}
+
+
+
+
+
 
 
 
@@ -863,18 +971,18 @@ gboolean send_to_room(gpointer key, gpointer val, gpointer data)
 /* 1. setja foreach clean fall á channel sem hreinsar alla sem hafa 0 users nema lobby!
  * 2. setja username framan við þann sem sendir message (me ef maður sjálfur)
  * 3. authentication
- * 4. pm 
+ * 4. pm
  * 5. timeout
  * 6. tölvuleikur
- * 
  *
- * 
  *
- * 
  *
- * 
  *
- * 
  *
- * 
+ *
+ *
+ *
+ *
+ *
+ *
  * */

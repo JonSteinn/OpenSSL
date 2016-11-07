@@ -1,8 +1,8 @@
 /***********************************************
-   __________     ________          __ 
+   __________     ________          __
   / __/ __/ /    / ___/ (_)__ ___  / /_
  _\ \_\ \/ /__  / /__/ / / -_) _ \/ __/
-/___/___/____/  \___/_/_/\__/_//_/\__/  
+/___/___/____/  \___/_/_/\__/_//_/\__/
 
 ************************************************
 JON STEINN ELIASSON   - JONSTEINN@GMAIL.COM
@@ -73,7 +73,7 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 
 /* Global variables */
 static int server_fd;
-static SSL *server_ssl;   
+static SSL *server_ssl;
 static SSL_CTX *ssl_ctx;
 static char *prompt;
 static int running = TRUE;
@@ -91,8 +91,8 @@ void request_game();
 void request_join(char *line);
 void request_list();
 void request_roll();
-void request_say();
-void request_user();
+void request_say(char *line);
+void request_user(char *line);
 void request_who();
 
 /* Misc */
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
 
 	// Clean up when done
 	close_connection();
-	
+
 	return 0;
 }
 
@@ -170,7 +170,7 @@ void exit_error(char *msg)
 
 
 
-/* Initialization of sockets and connection to server. All error 
+/* Initialization of sockets and connection to server. All error
  * leads to termination. Returns file descriptor (int) */
 int init_server_connection(int port)
 {
@@ -185,7 +185,7 @@ int init_server_connection(int port)
 	server.sin_addr.s_addr = inet_addr(HOST);
 	server.sin_port = htons(port);
 
-	// Connect to server 
+	// Connect to server
 	if (connect(socket_fd, (struct sockaddr *)&server, (socklen_t)sizeof(server)) < 0) exit_error("connect");
 
 	return socket_fd;
@@ -206,7 +206,7 @@ void init_ssl()
 
 	// Exit on error
 	if ((ssl_ctx = SSL_CTX_new(TLSv1_client_method())) == NULL) exit_error("ssl ctx");
-	
+
 	// Set ssl (connection) for server
 	server_ssl = SSL_new(ssl_ctx);
 	SSL_set_fd(server_ssl, server_fd);
@@ -249,7 +249,7 @@ void client_loop()
 		// Wait for requests
 		fd_set rfds;
 		int r = SELECT(&rfds, server_fd);
-		
+
 		// If select returns an error, we close the client
 		// unless EINTR error, then we skip the iteration
 		if (r < 0)
@@ -259,7 +259,7 @@ void client_loop()
 			break;
 		}
 
-		// If nothing has happened for 'NO_ACTIION_TIME' then 
+		// If nothing has happened for 'NO_ACTIION_TIME' then
 		// we prompt the user and let him no that he is inactive
 		// The rest of the iteration will be skipped.
 		if (r == 0)
@@ -273,7 +273,7 @@ void client_loop()
 
 		// If standard input is ready to talk
 		if (FD_ISSET(STDIN_FILENO, &rfds)) rl_callback_read_char();
-		
+
 		// If server is ready to talk
 		if (FD_ISSET(server_fd, &rfds))
 		{
@@ -291,7 +291,7 @@ void client_loop()
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
 				fflush(stdout);
-				if (write (STDOUT_FILENO, prompt, strlen(prompt)) < 0) perror("write");	
+				if (write (STDOUT_FILENO, prompt, strlen(prompt)) < 0) perror("write");
 				fsync(STDOUT_FILENO);
 			}
 		}
@@ -302,7 +302,7 @@ void client_loop()
 
 
 
-/* A wrapped version select, that handles attinional logic. 
+/* A wrapped version select, that handles attinional logic.
  * Returns the return value of select() */
 int SELECT(fd_set *rfds, int server_fd)
 {
@@ -359,8 +359,8 @@ void readline_callback(char *line)
 	else if (strncmp(JOIN, line, 5) == 0) request_join(line);
 	else if (strncmp(LIST, line, 5) == 0) request_list();
 	else if (strncmp(ROLL, line, 5) == 0) request_roll();
-	else if (strncmp(SAY, line, 4) == 0) request_say();
-	else if (strncmp(USER, line, 5) == 0) request_user();
+	else if (strncmp(SAY, line, 4) == 0) request_say(line);
+	else if (strncmp(USER, line, 5) == 0) request_user(line);
 	else if (strncmp(WHO, line, 4) == 0) request_who();
 	else
 	{
@@ -390,7 +390,7 @@ void request_game()
 void request_join(char *line)
 {
 	// Skip whitespace
-	int i = 5; 
+	int i = 5;
 	while (line[i] != '\0' && isspace(line[i])) {i++;}
 
 	// Handle missing channel name
@@ -400,22 +400,24 @@ void request_join(char *line)
 		fsync(STDOUT_FILENO);
 		rl_redisplay();
 	}
-
-	// On error, we won't change channel
-	if (SSL_write(server_ssl, line, strlen(line)) == -1)
+	else
 	{
-		perror(JOIN);
-		return;
-	}
+		// On error, we won't change channel
+		if (SSL_write(server_ssl, line, strlen(line)) == -1)
+		{
+			perror(JOIN);
+			return;
+		}
 
-	// TODO: Can this overflow the buffer? Is there a leak here?
-	// Replace prompt
-	free(prompt);
-	char *chatroom = strdup(&(line[i]));
-	strcat(chatroom, "> ");
-	prompt = strdup(chatroom);
-	free(chatroom);
-	rl_set_prompt(prompt);
+		// TODO: Can this overflow the buffer? Is there a leak here?
+		// Replace prompt
+		free(prompt);
+		char *chatroom = strdup(&(line[i]));
+		strcat(chatroom, "> ");
+		prompt = strdup(chatroom);
+		free(chatroom);
+		rl_set_prompt(prompt);
+	}
 }
 
 
@@ -441,19 +443,68 @@ void request_roll()
 
 
 
-
-void request_say()
+/* Sends a privatate message to another client in the
+ * form of username and message seperated with whitespace. */
+void request_say(char *line)
 {
-	// TODO
+	// Skip whitespace
+	int i = 4;
+	while (line[i] != '\0' && isspace(line[i])) { i++; }
+
+	// Handle missing username
+	if (line[i] == '\0')
+	{
+		if (write(STDOUT_FILENO, "Usage: /say username message\n", 29) < 0) perror("write");
+		fsync(STDOUT_FILENO);
+		rl_redisplay();
+	}
+
+	// Skip whitespace
+	int j = i+1;
+	while (line[j] != '\0' && isgraph(line[j])) {j++;}
+
+	// Handle missing message
+	if (line[j] == '\0')
+	{
+		if (write(STDOUT_FILENO, "Usage: /say username message\n", 29) < 0) perror("write");
+		fsync(STDOUT_FILENO);
+		rl_redisplay();
+	}
+	else
+	{
+		// On error, we won't send anything
+		if (SSL_write(server_ssl, line, strlen(line)) == -1)
+		{
+			perror(SAY);
+			return;
+		}
+	}
 }
 
 
 
 
 
-void request_user()
+void request_user(char *line)
 {
-	// TODO
+	int i = 5;
+	/* Skip whitespace */
+	while (line[i] != '\0' && isspace(line[i])) {i++;}
+
+	// Handle missing name
+	if (line[i] == '\0')
+	{
+		if (write(STDOUT_FILENO, "Usage: /user username\n", 22) < 0) perror("write");
+		fsync(STDOUT_FILENO);
+		rl_redisplay();
+	}
+
+	// On error, we won't send anything
+	if (SSL_write(server_ssl, line, strlen(line)) == -1)
+	{
+		perror(USER);
+		return;
+	}
 }
 
 
@@ -502,7 +553,7 @@ void getpasswd(const char *prompt, char *passwd, size_t size)
 	fsync(STDOUT_FILENO);
 	(void)(fgets(passwd, size, stdin) + 1);
 
-	// The result in passwd is '\0' terminated and may contain 
+	// The result in passwd is '\0' terminated and may contain
 	// a final '\n'. If it exists, we remove it.
 	if (passwd[strlen(passwd) -1] == '\n') passwd[strlen(passwd)-1] = '\0';
 
