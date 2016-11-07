@@ -50,12 +50,14 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 /* Flags for logger */
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
+#define LOG_TIMED_OUT 2
 
 /* Metrics for clients */
 #define MAX_QUEUED 5
 
-/* Timer for select */
-#define NO_ACTION_TIME 60
+/* Timers */
+#define TIME_OUT_CHECK_INTERVAL 1
+#define CLIENT_TIMEOUT 30
 
 /* Name of initial channel */
 #define INIT_CHANNEL "Lobby"
@@ -98,6 +100,7 @@ struct client_data
 	struct sockaddr_in addr;
 	char *name;
 	char *room;
+	time_t timer;
 };
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
@@ -106,7 +109,8 @@ struct client_data
 ////////////////////////////////////////////////////////////////
 // IF YOU ADD FIELDS TO CLIENT DATA THAT NEED MEMORY          //
 // ALLOCATION BEFORE BEING ADDED TO ANY DATA STRUCTURE, YOU   //
-// UPDATE CLEANUP METHODS SO THEY FREE THESE FIELDS           //
+// UPDATE CLEANUP METHODS SO THEY FREE THESE FIELDS. If       //
+// UNSURE, NOTE WHAT WAS ADDED AND WHERE AND REVIEW LATER	  //
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
@@ -147,7 +151,7 @@ void handle_join(struct client_data *client, char *buffer);
 void handle_user(struct client_data *client, char *buffer);
 
 /* Memory clean up */
-void free_client(struct client_data *client);
+void free_client(struct client_data *client, int flag);
 void clean_all();
 
 /* Misc */
@@ -155,6 +159,7 @@ void server_loop(int server_fd);
 int SELECT(fd_set *rfds, int server_fd);
 void client_logger(struct client_data *client, int status);
 void exit_error(char *msg);
+int has_timed_out(time_t client_time);
 
 /* Tree iterations */
 gboolean get_max_fd(gpointer key, gpointer val, gpointer data);
@@ -167,6 +172,7 @@ gboolean find_user_by_name(gpointer key, gpointer val, gpointer data);
 gboolean delete_empty_room(gpointer key, gpointer val, gpointer data);
 gboolean clean_all_rooms(gpointer key, gpointer val, gpointer data);
 gboolean clean_all_clients(gpointer key, gpointer val, gpointer data);
+gboolean timeout_checker(gpointer key, gpointer val, gpointer data);
 
 
 
@@ -365,10 +371,10 @@ int chat_cmp(const void *name1, const void *name2)
 
 /* Free client completely from server. Frees memory in all
  * collections and closes connection*/
-void free_client(struct client_data *client)
+void free_client(struct client_data *client, int flag)
 {
 	// Log client' departure
-	client_logger(client, LOG_DISCONNECTED);
+	client_logger(client, flag);
 
 	// Close connection and free connection resoures
 	close(client->fd);
@@ -399,6 +405,7 @@ void server_loop(int server_fd)
 		// Wait for request
 		fd_set rfds;
 		int r = SELECT(&rfds, server_fd);
+
 		if (r < 0)
 		{
 			// If select returns an error, we close the client
@@ -407,11 +414,9 @@ void server_loop(int server_fd)
 			perror("select()");
 			break;
 		}
-		if (r == 0)
-		{
-			fprintf(stdout, "nothing for %ds\n", NO_ACTION_TIME);
-			fflush(stdout);
-		}
+
+		// Check for timeouts
+		if (r == 0) g_tree_foreach(client_collection, timeout_checker, NULL);
 
 		// If new client awaits
 		if (FD_ISSET(server_fd, &rfds)) add_client(server_fd, ctx);
@@ -420,9 +425,10 @@ void server_loop(int server_fd)
 		g_tree_foreach(client_collection, responde_to_client, &rfds);
 
 		// Remove empty channels (other than lobby)
-		g_tree_foreach(room_collection, delete_empty_room, NULL);		
+		g_tree_foreach(room_collection, delete_empty_room, NULL);
 	}
 }
+
 
 
 
@@ -447,7 +453,7 @@ int SELECT(fd_set *rfds, int server_fd)
 
 	// Set inactive time
 	struct timeval tv;
-	tv.tv_sec = NO_ACTION_TIME;
+	tv.tv_sec = TIME_OUT_CHECK_INTERVAL;
 	tv.tv_usec = 0;
 
 	return select(max_fd + 1, rfds, NULL, NULL, &tv);
@@ -498,6 +504,9 @@ void add_client(int server_fd, SSL_CTX *ctx)
 	client->room = g_strdup(INIT_CHANNEL);
 	client->name = g_strdup("NONE");
 
+	// Set timeout to 0
+	client->timer = time(&client->timer);
+
 	// Add client to client collection
 	g_tree_insert(client_collection, &client->addr, client);
 
@@ -531,6 +540,18 @@ int find_chat_room(const void *name1, const void *name2)
 	if (x > 0) return -1;
 	if (x < 0) return 1;
 	return 0;
+}
+
+
+
+
+
+/* Returns true iff timer of client has passed CLIENT_TIMEOUT */
+int has_timed_out(time_t client_time)
+{
+	time_t current;
+	time(&current);
+	return (difftime(current, client_time) >= CLIENT_TIMEOUT) ? 1 : 0;
 }
 
 
@@ -575,6 +596,7 @@ void client_logger(struct client_data *client, int status)
 	// Set status
 	if (status == LOG_CONNECTED) fwrite(" : <CONNECTED>\n", 1, 15, tof);
 	else if (status == LOG_DISCONNECTED) fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
+	else if (status == LOG_TIMED_OUT)  fwrite(" : <TIMED OUT>\n", 1, 18, tof);
 
 	// Release resources
 	fflush(tof);
@@ -774,12 +796,6 @@ void handle_join(struct client_data *client, char *buffer)
 	GTree *tree;
 	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL) add_room(room_name);
 	tree = g_tree_search(room_collection, find_chat_room, client->room);
-	if(tree != NULL)
-	{
-		fprintf(stdout, "%s\n","Tree ready");
-		fflush(stdout);
-	}
-	else exit_error("TREE IS NULL FFS!");
 	if(g_tree_remove(tree, &client->addr) == FALSE) fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
 
 	tree = g_tree_search(room_collection, find_chat_room, room_name);
@@ -828,9 +844,12 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 		// If read is successfull
 		if (SSL_read(client->ssl, buff, sizeof(buff) - 1) > 0)
 		{
+			// Timer is restart since client has proven to be active
+			client->timer = time(&client->timer);
+
 			// Cases of different requests. Else case serves for standard messages.
 			if (strncmp(buff, "/who", 4) == 0) handle_who(client->ssl);
-			else if (strncmp(buff, "/bye", 4) == 0) free_client(client);
+			else if (strncmp(buff, "/bye", 4) == 0) free_client(client, LOG_DISCONNECTED);
 			else if (strncmp(buff, "/list", 5) == 0) handle_list(client->ssl);
 			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
 			else if (strncmp(buff, "/say", 4) == 0) handle_say(client->name, buff);
@@ -861,8 +880,9 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			/////////////////////////////////////////////////////////////////
 			else g_tree_foreach(g_tree_search(room_collection, find_chat_room, client->room), send_to_room, buff);
 		}
-		else free_client(client); // Assumed dead
+		else free_client(client, LOG_DISCONNECTED); // Assumed dead
 	}
+
 	return FALSE;
 }
 
@@ -1097,6 +1117,27 @@ gboolean clean_all_clients(gpointer key, gpointer val, gpointer data)
 	g_free(client->name);
 	g_free(client->room);
 	g_free(client);
+
+	return FALSE;
+}
+
+
+
+
+
+/* On iteration, checks if clients have timed out and if 
+ * so, he requests that the connection will be terminated. */
+gboolean timeout_checker(gpointer key, gpointer val, gpointer data)
+{
+	// Fool compiler
+	UNUSED(key);
+	UNUSED(data);
+
+	// If time has past idle limit, we terminate connection.
+	if (has_timed_out(((struct client_data *)val)->timer)) 
+	{
+		free_client((struct client_data *)val, LOG_TIMED_OUT);
+	}
 
 	return FALSE;
 }
