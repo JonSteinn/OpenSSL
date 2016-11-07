@@ -143,6 +143,7 @@ int main(int argc, char **argv)
 
 
 
+/* Handling ctrl+z event */
 void signal_handler(int signum)
 {
 	UNUSED(signum);

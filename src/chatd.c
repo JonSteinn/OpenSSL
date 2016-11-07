@@ -100,18 +100,6 @@ struct client_data
 	char *room;
 };
 
-/* Data structure for chat rooms. It includes the following fields:
- *   (identifier, type, description)
- *   1: name, char *, name of channel
- *   2: members, GTree *, collection of clients
- * Each chat room has a tree of the user it contains. Initially, one
- * one channel exists. */
-struct room_data
-{
-	char *name;
-	GTree *members;
-};
-
 
 
 
@@ -302,18 +290,8 @@ void init_chat_rooms()
 /* Add room to tree */
 void add_room(char *name)
 {
-	/////////////////////////////////////////////////////////
-	// TODO: Struct memory is leaking, do we even need it? //
-	/////////////////////////////////////////////////////////
-
-	// Create a allocated struct for value and for its value,
-	// name and sub-tree. All three must be freed!
-	struct room_data *newChat = g_new0(struct room_data, 1);
-	newChat->name = g_strdup(name);
-	newChat->members = g_tree_new(sockaddr_in_cmp);
-
 	// Add to tree
-	g_tree_insert(room_collection, newChat->name, newChat->members);
+	g_tree_insert(room_collection, g_strdup(name), g_tree_new(sockaddr_in_cmp));
 }
 
 
