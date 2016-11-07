@@ -19,6 +19,7 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <glib.h>
+#include <math.h>
 #include <time.h>
 #include <signal.h>
 #include <errno.h>
@@ -72,6 +73,8 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #define SAY "/say"
 #define USER "/user"
 #define WHO "/who"
+#define YES "/yes"
+#define NO "/no"
 
 /* Messages */
 #define GREET "WELCOME"
@@ -110,7 +113,7 @@ struct client_data
 // IF YOU ADD FIELDS TO CLIENT DATA THAT NEED MEMORY          //
 // ALLOCATION BEFORE BEING ADDED TO ANY DATA STRUCTURE, YOU   //
 // UPDATE CLEANUP METHODS SO THEY FREE THESE FIELDS. If       //
-// UNSURE, NOTE WHAT WAS ADDED AND WHERE AND REVIEW LATER	  //
+// UNSURE, NOTE WHAT WAS ADDED AND WHERE AND REVIEW LATER	    //
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
@@ -149,6 +152,7 @@ void handle_list(SSL *ssl);
 void handle_say(char *sender, char *buffer);
 void handle_join(struct client_data *client, char *buffer);
 void handle_user(struct client_data *client, char *buffer);
+void handle_game(struct client_data *client, char *buffer);  // NEW
 
 /* Memory clean up */
 void free_client(struct client_data *client, int flag);
@@ -173,6 +177,7 @@ gboolean delete_empty_room(gpointer key, gpointer val, gpointer data);
 gboolean clean_all_rooms(gpointer key, gpointer val, gpointer data);
 gboolean clean_all_clients(gpointer key, gpointer val, gpointer data);
 gboolean timeout_checker(gpointer key, gpointer val, gpointer data);
+gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data); // NEW
 
 
 
@@ -415,8 +420,31 @@ void server_loop(int server_fd)
 			break;
 		}
 
-		// Check for timeouts
-		if (r == 0) g_tree_foreach(client_collection, timeout_checker, NULL);
+
+
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		//////////-------------------------------------------------------//////////
+		//////////    TODO: TIMEOUT DISCONNECTS THE USER SERVER SIDE.    //////////
+	  //////////          CLIENT HANGS IN CHANNEL CLIENT SIDE          //////////
+		//////////-------------------------------------------------------//////////
+		///////////////////////////////////////////////////////////////////////////
+		// // Check for timeouts                                                 //
+		// if (r == 0) g_tree_foreach(client_collection, timeout_checker, NULL); //
+		//                                                                       //
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+
+
+
 
 		// If new client awaits
 		if (FD_ISSET(server_fd, &rfds)) add_client(server_fd, ctx);
@@ -534,7 +562,7 @@ int find_chat_room(const void *name1, const void *name2)
 	// Store reference
 	const char *first = name1;
 	const char *second = name2;
-	
+
 	// Compare strings, return opposite if non-equal
 	int x = g_strcmp0(first, second);
 	if (x > 0) return -1;
@@ -610,30 +638,11 @@ void client_logger(struct client_data *client, int status)
 /* Create response for /who request */
 void handle_who(SSL *ssl)
 {
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	//---------------------------------------------------------//
-	// TODO: Ættum við að vera að senda strax þetta í upphafi? //
-	//---------------------------------------------------------//
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-
-	// Send header to client
-	if (SSL_write(ssl, "\nList of clients:\n", strlen("\nList of clients:\n")) < 0) perror("SSL write");
-
 	// Create an empty string that handles memory allocation during appending.
 	GString *buffer = g_string_new(NULL);
 
+	// Set the header of the message
+	buffer = g_string_append(buffer, "\nList of clients:\n");
 	// Pass string to foreach method that appends users to it
 	g_tree_foreach(client_collection, append_client_list, buffer);
 
@@ -763,7 +772,7 @@ void handle_join(struct client_data *client, char *buffer)
 	/////////////////////////////////////////////////////////////
 	/////////////-------------------------------/////////////////
 	///////////// TODO: FIX MEMORY LEAK, IF ANY /////////////////
-	/////////////-------------------------------/////////////////	
+	/////////////-------------------------------/////////////////
 	/////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////
@@ -823,6 +832,25 @@ void handle_user(struct client_data *client, char *buffer)
 
 
 
+
+void handle_game(struct client_data *client, char *buffer)
+{
+	// Initialize data types
+	char *receiver = g_strchomp(&buffer[6]);
+
+	// Create a list and insert the receiver and the sender
+	GList *list = NULL;
+	list = g_list_append(list, receiver);
+	list = g_list_append(list, client);
+
+	// Find the user by name and send the game request
+	g_tree_foreach(client_collection, find_user_and_respond_to_game, list);
+}
+
+
+
+
+
 /* Iteration-bound. Runs through the tree of clients, and for those
  * who "have something to say", we process the request. Return value
  * is irrelivant. */
@@ -854,6 +882,7 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			else if (strncmp(buff, "/join", 5) == 0) handle_join(client, buff);
 			else if (strncmp(buff, "/say", 4) == 0) handle_say(client->name, buff);
 			else if (strncmp(buff, "/user", 5) == 0) handle_user(client, buff);
+			else if (strncmp(buff, "/game", 5) == 0) handle_game(client, buff);
 			/////////////////////////////////////////////////////////////////
 			/////////////////////////////////////////////////////////////////
 			/////////////////////////////////////////////////////////////////
@@ -1088,9 +1117,9 @@ gboolean clean_all_rooms(gpointer key, gpointer val, gpointer data)
 	// Free string memory
 	g_free((char *)key);
 
-	// We only remove the tree, the deep memory will 
+	// We only remove the tree, the deep memory will
 	// be free when client_collection is destroyed.
-	g_tree_destroy((GTree *)val); 
+	g_tree_destroy((GTree *)val);
 
 	return FALSE;
 }
@@ -1125,7 +1154,7 @@ gboolean clean_all_clients(gpointer key, gpointer val, gpointer data)
 
 
 
-/* On iteration, checks if clients have timed out and if 
+/* On iteration, checks if clients have timed out and if
  * so, he requests that the connection will be terminated. */
 gboolean timeout_checker(gpointer key, gpointer val, gpointer data)
 {
@@ -1134,10 +1163,161 @@ gboolean timeout_checker(gpointer key, gpointer val, gpointer data)
 	UNUSED(data);
 
 	// If time has past idle limit, we terminate connection.
-	if (has_timed_out(((struct client_data *)val)->timer)) 
+	if (has_timed_out(((struct client_data *)val)->timer))
 	{
 		free_client((struct client_data *)val, LOG_TIMED_OUT);
 	}
 
+	return FALSE;
+}
+
+
+
+
+
+/* On iteration, checks if the user that has been requested
+ * to play a game exists. If so, they will play a game of dice.
+*  If he does not exist, nothing happens. */
+gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data)
+{
+	// Avoid compiler warnings
+	UNUSED(key);
+
+	// Initialize data types
+	struct client_data *receiver = val;
+	GList *list = data;
+
+	// Get the name of the user supposed to receive the message
+	char *receiver_name = g_list_nth_data(list, 0);
+
+	// If the receiver is found in the collection
+	if(strcmp (receiver->name, receiver_name) == 0)
+	{
+		/* Get the  data from the list and make a private
+		 * message prompt */
+		struct client_data *sender = g_list_nth_data(list, 1);
+		char *sender_name = sender->name;
+		// Build string to hold the message
+		GString *string = g_string_new("Would you like to play a game with ");
+		string = g_string_append(string, sender_name);
+		string = g_string_append(string, " /yes | /no");
+
+		// Send a game request
+		if (SSL_write(receiver->ssl, string->str, string->len) < 0) perror("SSL_write");
+
+		// Buffer to hold the answer to the game request
+		char buff[MESSAGE_SIZE];
+		memset(buff,0, sizeof(buff));
+
+		// Check if the recipient wants to play or not
+		if (SSL_read(receiver->ssl, buff, sizeof(buff) - 1) > 0)
+		{
+			// Build a string to send to the sender
+			GString *msg = g_string_new(receiver->name);
+			msg = g_string_append(msg, " accepted your request!");
+
+			// Send a response to the sender requesting the game, that the game has been accepted
+			if (SSL_write(sender->ssl, msg->str, msg->len) < 0) perror("SSL_write");
+
+			// Initialize numbers to roll
+			int rand_num_first = 0;
+			int rand_num_second = 0;
+			char *person1 = NULL;
+			char *person2 = NULL;
+
+			// Check if the user accepted the /game request
+			if((strncmp(YES, buff, 4)) == 0)
+			{
+				// Seed for random generator
+				time_t t;
+				srand((unsigned) time(&t));
+
+				// Buffer for receiving /roll command from sender
+				char buff_first[MESSAGE_SIZE];
+				memset(buff_first,0, sizeof(buff_first));
+
+				// Read roll number from sender
+				if (SSL_read(sender->ssl, buff_first, sizeof(buff_first) - 1) > 0)
+				{
+					// Check of the sender has rolled
+					if (strncmp(buff_first, "/roll", 5) == 0)
+					{
+						// Generate a random number from 1 to 6
+						rand_num_first = rand() % 5 +1;
+
+						// Copy and convert the number from int to char pointer
+						person1 = g_strdup_printf(":%d ", rand_num_first);
+					}
+				}
+
+				// Buffer for receiving /roll command from receiver
+				char buff_second[MESSAGE_SIZE];
+				memset(buff_second,0, sizeof(buff_second));
+
+				// Read roll from receiver
+				if (SSL_read(receiver->ssl, buff_second, sizeof(buff_second) - 1) > 0)
+				{
+					// Check of the receiver has rolled
+					if (strncmp(buff_second, "/roll", 5) == 0)
+					{
+						// Generate a random number from 1 to 6
+						rand_num_second = rand() % 5 +1;
+						// Copy and convert the number from int to char pointer
+						person2 = g_strdup_printf(":%d ", rand_num_second);
+					}
+				}
+
+				/* Make a string to announce the winner.
+				 * Compare the rolls and build a string
+				 * according who won */
+
+				GString *win_msg = g_string_new(NULL);
+
+				if(rand_num_first > rand_num_second)
+				{
+					win_msg = g_string_append(win_msg, "The winner is [");
+					win_msg = g_string_append(win_msg, sender->name);
+					win_msg = g_string_append(win_msg, "]\n\t");
+					win_msg = g_string_append(win_msg, sender->name);
+					win_msg = g_string_append(win_msg," Rolled ");
+					win_msg = g_string_append(win_msg, person1);
+					win_msg = g_string_append(win_msg, "\n\t");
+					win_msg = g_string_append(win_msg, receiver->name);
+					win_msg = g_string_append(win_msg, " Rolled ");
+					win_msg = g_string_append(win_msg, person2);
+				}
+				else if(rand_num_first < rand_num_second)
+				{
+					win_msg = g_string_append(win_msg, "The winner is [");
+					win_msg = g_string_append(win_msg, receiver->name);
+					win_msg = g_string_append(win_msg, "]\n\t");
+					win_msg = g_string_append(win_msg, sender->name);
+					win_msg = g_string_append(win_msg," Rolled ");
+					win_msg = g_string_append(win_msg, person1);
+					win_msg = g_string_append(win_msg, "\n\t");
+					win_msg = g_string_append(win_msg, receiver->name);
+					win_msg = g_string_append(win_msg, " Rolled ");
+					win_msg = g_string_append(win_msg, person2);
+				}
+				else // If there is a draw in the game
+				{
+					win_msg = g_string_append(win_msg, "\n\tDRAW");
+				}
+
+				// Write the result of the game to both users
+				SSL_write(receiver->ssl, win_msg->str, win_msg->len);
+				SSL_write(sender->ssl, win_msg->str, win_msg->len);
+
+				// Free resources
+				g_string_free(win_msg, TRUE);
+				g_free(person1);
+				g_free(person2);
+			}
+			else if ((strncmp(NO, buff, 3)) == 0) // Tell the sender that his request was denied
+			{
+				if (SSL_write(sender->ssl, "Game declined", strlen("Game declined")) < 0) perror("SSL_write");
+			}
+		}
+	}
 	return FALSE;
 }

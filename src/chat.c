@@ -13,7 +13,6 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 
 
 
-
 /* Libraries */
 #include <assert.h>
 #include <sys/select.h>
@@ -66,10 +65,8 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #define SAY "/say"
 #define USER "/user"
 #define WHO "/who"
-
-
-
-
+#define YES "/yes"
+#define NO "/no"
 
 /* Global variables */
 static int server_fd;
@@ -87,10 +84,10 @@ int init_server_connection(int port);
 void init_ssl();
 
 /* Request handler */
-void request_game();
+void request_game(char *line); // new
 void request_join(char *line);
 void request_list();
-void request_roll();
+void request_roll(); // new
 void request_say(char *line);
 void request_user(char *line);
 void request_who();
@@ -103,7 +100,7 @@ void client_loop();
 void readline_callback(char *line);
 void getpasswd(const char *prompt, char *passwd, size_t size);
 int SELECT(fd_set *rfds, int server_fd);
-
+void respond_to_game_reqest(char *line); // new
 
 
 
@@ -143,7 +140,6 @@ int main(int argc, char **argv)
 
 
 
-/* Handling ctrl+z event */
 void signal_handler(int signum)
 {
 	UNUSED(signum);
@@ -356,7 +352,8 @@ void readline_callback(char *line)
 
 	// Command handlers:
 	if ((strncmp(BYE, line, 4) == 0) || (strncmp(QUIT, line, 5) == 0)) running = FALSE;
-	else if (strncmp(GAME, line, 5) == 0) request_game();
+	else if ((strncmp(YES, line, 4) == 0) || (strncmp(NO, line, 3) == 0)) respond_to_game_reqest(line);
+	else if (strncmp(GAME, line, 5) == 0) request_game(line);
 	else if (strncmp(JOIN, line, 5) == 0) request_join(line);
 	else if (strncmp(LIST, line, 5) == 0) request_list();
 	else if (strncmp(ROLL, line, 5) == 0) request_roll();
@@ -375,14 +372,50 @@ void readline_callback(char *line)
 }
 
 
-
-
-
-void request_game()
+/* Sends a request to play a game to a specific
+ * user on the server */
+void request_game(char *line)
 {
-	// TODO
+	// Skip whitespace
+	int i = 5;
+	while (line[i] != '\0' && isspace(line[i])) {i++;}
+
+	// Handle missing channel name
+	if (line[i] == '\0')
+	{
+		if (write(STDOUT_FILENO, "Usage: /game username\n", 22) < 0) perror("write");
+		fsync(STDOUT_FILENO);
+		rl_redisplay();
+	}
+	else if (SSL_write(server_ssl, line, strlen(line)) == -1) perror("SSL_write");
 }
 
+
+
+
+// sends a /roll to the server if playing a game.
+void request_roll()
+{
+		if(SSL_write(server_ssl, ROLL, strlen(ROLL)) == -1) perror(ROLL);
+}
+
+
+
+
+/* Used for reposnding to the game request
+ * with either /yes or /no */
+void respond_to_game_reqest(char *line)
+{
+	if(strncmp(YES, line, 4) == 0)
+	{
+		if(SSL_write(server_ssl, YES, strlen(YES)) == -1) perror("Respond Yes");
+	}
+	else
+	{
+		if(SSL_write(server_ssl, NO, strlen(NO)) == -1) perror("Respond No");
+	}
+
+}
 
 
 
@@ -432,14 +465,6 @@ void request_list()
 	if (SSL_write(server_ssl, LIST, strlen(LIST)) == -1) perror(LIST);
 }
 
-
-
-
-
-void request_roll()
-{
-	// TODO
-}
 
 
 
