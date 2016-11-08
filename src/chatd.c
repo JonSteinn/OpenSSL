@@ -60,8 +60,9 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 #define TIME_OUT_CHECK_INTERVAL 1
 #define CLIENT_TIMEOUT 30
 
-/* Name of initial channel */
+/* Initial namings */
 #define INIT_CHANNEL "Lobby"
+#define INIT_USER "Anonymous"
 
 /* Commands */
 #define BYE "/bye"
@@ -105,18 +106,6 @@ struct client_data
 	char *room;
 	time_t timer;
 };
-////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////
-///////////////////////   IMPORTANT!     ///////////////////////
-////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////
-// IF YOU ADD FIELDS TO CLIENT DATA THAT NEED MEMORY          //
-// ALLOCATION BEFORE BEING ADDED TO ANY DATA STRUCTURE, YOU   //
-// UPDATE CLEANUP METHODS SO THEY FREE THESE FIELDS. If       //
-// UNSURE, NOTE WHAT WAS ADDED AND WHERE AND REVIEW LATER	    //
-////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////
 
 
 
@@ -152,7 +141,7 @@ void handle_list(SSL *ssl);
 void handle_say(char *sender, char *buffer);
 void handle_join(struct client_data *client, char *buffer);
 void handle_user(struct client_data *client, char *buffer);
-void handle_game(struct client_data *client, char *buffer);  // NEW
+void handle_game(struct client_data *client, char *buffer);
 
 /* Memory clean up */
 void free_client(struct client_data *client, int flag);
@@ -177,7 +166,8 @@ gboolean delete_empty_room(gpointer key, gpointer val, gpointer data);
 gboolean clean_all_rooms(gpointer key, gpointer val, gpointer data);
 gboolean clean_all_clients(gpointer key, gpointer val, gpointer data);
 gboolean timeout_checker(gpointer key, gpointer val, gpointer data);
-gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data); // NEW
+gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data);
+gboolean check_availability(gpointer key, gpointer val, gpointer data);
 
 
 
@@ -254,10 +244,14 @@ void init_SSL()
 
 
 
+/* Removes everything from all data structures and frees their emory */
 void clean_all()
 {
+	// Clean rooms 
 	g_tree_foreach(room_collection, clean_all_rooms, NULL);
 	g_tree_destroy(room_collection);
+
+	// Clean clients
 	g_tree_foreach(client_collection, clean_all_clients, NULL);
 	g_tree_destroy(client_collection);
 }
@@ -307,17 +301,10 @@ void init_chat_rooms()
 	// Add lobby to structure
 	add_room(INIT_CHANNEL);
 
-	// Manually add (for debugging)
+	// We can add more channels if we want more predefined.
 	//add_room("chat room 1");
 	//add_room("chat room 2");
 	//add_room("chat room 3");
-	//add_room("chat room 4");
-	//add_room("chat room 5");
-	//add_room("chat room 6");
-	//add_room("chat room 7");
-	//add_room("chat room 8");
-	//add_room("chat room 9");
-
 }
 
 
@@ -507,7 +494,7 @@ void add_client(int server_fd, SSL_CTX *ctx)
 
 	// Set room and name with allocated memory
 	client->room = g_strdup(INIT_CHANNEL);
-	client->name = g_strdup("NONE");
+	client->name = g_strdup(INIT_USER);
 
 	// Set timeout to 0
 	client->timer = time(&client->timer);
@@ -639,28 +626,6 @@ void handle_who(SSL *ssl)
  * be notified.  */
 void handle_say(char *sender, char *buff)
 {
-
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	//////////---------------------------------------------//////
-	////////// TODO: NOTIFY CLIENT IF USER DOES NOT EXIST  //////
-	//////////      CHECK FOR MEMORY LEAK                  //////
-	//////////---------------------------------------------//////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-
 	// Initialize data types
 	char *receiver;
 	char *message;
@@ -673,7 +638,15 @@ void handle_say(char *sender, char *buff)
 	while (buff[j] != '\0' && isgraph(buff[j])) {j++;}
 
 	receiver = strndup(&(buff[i]), j - i);
-	message = g_strchomp(&buff[i+strlen(receiver)+1]);
+
+	// No message allowed to anonymous
+	if (g_strcmp0(receiver, INIT_USER) == 0)
+	{
+		g_free(receiver);
+		return;
+	}
+
+	message = g_strchomp(&buff[i + strlen(receiver) + 1]);
 
 	// Create a list and insert the receiver, sender and the message
 	GList *list = NULL;
@@ -685,7 +658,7 @@ void handle_say(char *sender, char *buff)
 	g_tree_foreach(client_collection, find_user_by_name, list);
 
 	// Free string resources
-	free(receiver);
+	g_free(receiver);
 }
 
 
@@ -695,27 +668,6 @@ void handle_say(char *sender, char *buff)
 /* Create response for /list request */
 void handle_list(SSL *ssl)
 {
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	//////--------------------------------------------------/////
-	////// TODO: Afhverju má ekki nota einn string í þetta? /////
-	//////--------------------------------------------------/////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-
-
 	// Buffer to send.
 	GString *buffer = g_string_new("\n\nList of chat rooms:");
 
@@ -738,69 +690,54 @@ void handle_list(SSL *ssl)
  * not exist, we create it but.  */
 void handle_join(struct client_data *client, char *buffer)
 {
+	// Remove client from old channel, clean up memory used for old channel's name.
+	g_tree_remove(g_tree_search(room_collection, find_chat_room, client->room), &client->addr);
+	g_free(client->room);
 
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////-------------------------------/////////////////
-	///////////// TODO: FIX MEMORY LEAK, IF ANY /////////////////
-	/////////////-------------------------------/////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-
-
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	////////////////// TODO: COMMENT STEPS //////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////
-
+	// Remove trailing whitespace
 	char *room_name = g_strchomp(&buffer[6]);
-	GTree *tree;
-	if((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL) add_room(room_name);
-	tree = g_tree_search(room_collection, find_chat_room, client->room);
-	if(g_tree_remove(tree, &client->addr) == FALSE) fprintf(stdout, "%s\n", "ERROR REMOVING FROM ROOM");
 
-	tree = g_tree_search(room_collection, find_chat_room, room_name);
-	g_tree_insert (tree, &client->addr, client);
+	// If room does not exist, we create a new one. In the end, tree will point to the 
+	// room with the given name, regardless if it did exist before or not.
+	GTree *tree;
+	if ((tree = g_tree_search(room_collection, find_chat_room, room_name)) == NULL)
+	{
+		add_room(room_name);
+		tree = g_tree_search(room_collection, find_chat_room, room_name);
+	}
+
+	// Allocate memory for client's new chat room name.
 	client->room = strdup(room_name);
+
+	// Add client to channel's tree
+	g_tree_insert(tree, &client->addr, client);
 }
 
 
 
 
 
-// Sets the user name of the client
+/* Sets the user name of the client */
 void handle_user(struct client_data *client, char *buffer)
 {
-	// Free the value from memory
-	g_free(client->name);
-
 	// Get the new name from buffer
 	char *name = g_strchomp(&buffer[6]);
+	int is_available = 1;
+
+	GList *lst = NULL;
+	lst = g_list_append(lst, name);
+	lst = g_list_append(lst, (gpointer)&is_available);
+
+	g_tree_foreach(client_collection, check_availability, lst);
+
+	if (!is_available)
+	{
+		if (SSL_write(client->ssl, "Not available!", strlen("Not available!")) < 0) perror("ssl_write");
+		return;
+	}
+
+	// Free the value from memory
+	g_free(client->name);
 
 	// Set the new name
 	client->name = strdup(name);
@@ -810,10 +747,14 @@ void handle_user(struct client_data *client, char *buffer)
 
 
 
+/* Initializes game playing request */
 void handle_game(struct client_data *client, char *buffer)
 {
-	// Initialize data types
+	// Remove trailing whitespace
 	char *receiver = g_strchomp(&buffer[6]);
+
+	// No games allowed with unamed users
+	if (g_strcmp0(receiver, INIT_USER) == 0) return;
 
 	// Create a list and insert the receiver and the sender
 	GList *list = NULL;
@@ -860,30 +801,6 @@ gboolean responde_to_client(gpointer key, gpointer val, gpointer data)
 			else if (strncmp(buff, "/say", 4) == 0) handle_say(client->name, buff);
 			else if (strncmp(buff, "/user", 5) == 0) handle_user(client, buff);
 			else if (strncmp(buff, "/game", 5) == 0) handle_game(client, buff);
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			//-------------------------------------------------------------//
-			//-------------------------------------------------------------//
-			// TODO: ADD more handling else-if-s and corresponding methods //
-			//-------------------------------------------------------------//
-			//-------------------------------------------------------------//
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
-			/////////////////////////////////////////////////////////////////
 			else g_tree_foreach(g_tree_search(room_collection, find_chat_room, client->room), send_to_room, buff);
 		}
 		else free_client(client, LOG_DISCONNECTED); // Assumed dead
@@ -969,8 +886,7 @@ gboolean append_client_list(gpointer key, gpointer val, gpointer data)
 
 	// Add name to buffer
 	buffer = g_string_append(buffer, "\nName: ");
-	if (client->name == NULL){}
-	else buffer = g_string_append(buffer, client->name);
+	if (client->name != NULL) buffer = g_string_append(buffer, client->name);
 
 	// Add chat to buffer
 	buffer = g_string_append(buffer, "\nChat room: ");
@@ -1026,7 +942,7 @@ gboolean find_user_by_name(gpointer key, gpointer val, gpointer data)
 	char *receiver = g_list_nth_data(list, 0);
 
 	// If the receiver is found in the collection
-	if(strcmp (client->name, receiver) == 0)
+	if (strcmp(client->name, receiver) == 0)
 	{
 		/* Get the  data from the list and make a private
 		 * message prompt */
@@ -1140,10 +1056,7 @@ gboolean timeout_checker(gpointer key, gpointer val, gpointer data)
 	UNUSED(data);
 
 	// If time has past idle limit, we terminate connection.
-	if (has_timed_out(((struct client_data *)val)->timer))
-	{
-		free_client((struct client_data *)val, LOG_TIMED_OUT);
-	}
+	if (has_timed_out(((struct client_data *)val)->timer)) free_client((struct client_data *)val, LOG_TIMED_OUT);
 
 	return FALSE;
 }
@@ -1168,12 +1081,13 @@ gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data
 	char *receiver_name = g_list_nth_data(list, 0);
 
 	// If the receiver is found in the collection
-	if(strcmp (receiver->name, receiver_name) == 0)
+	if (strcmp (receiver->name, receiver_name) == 0)
 	{
 		/* Get the  data from the list and make a private
 		 * message prompt */
 		struct client_data *sender = g_list_nth_data(list, 1);
 		char *sender_name = sender->name;
+
 		// Build string to hold the message
 		GString *string = g_string_new("Would you like to play a game with ");
 		string = g_string_append(string, sender_name);
@@ -1196,6 +1110,8 @@ gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data
 			// Send a response to the sender requesting the game, that the game has been accepted
 			if (SSL_write(sender->ssl, msg->str, msg->len) < 0) perror("SSL_write");
 
+			g_string_free(msg, TRUE);
+
 			// Initialize numbers to roll
 			int rand_num_first = 0;
 			int rand_num_second = 0;
@@ -1203,7 +1119,7 @@ gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data
 			char *person2 = NULL;
 
 			// Check if the user accepted the /game request
-			if((strncmp(YES, buff, 4)) == 0)
+			if ((strncmp(YES, buff, 4)) == 0)
 			{
 				// Seed for random generator
 				time_t t;
@@ -1296,5 +1212,22 @@ gboolean find_user_and_respond_to_game(gpointer key, gpointer val, gpointer data
 			}
 		}
 	}
+
+	return FALSE;
+}
+
+
+
+
+
+/* Check if user name is available. If username is found, a entry 
+ * that is initially 1, in the data is set as 0. */
+gboolean check_availability(gpointer key, gpointer val, gpointer data)
+{
+	UNUSED(key);
+
+	// If found
+	if (g_strcmp0(((struct client_data *)val)->name, (char *)g_list_nth_data((GList *)data, 0)) == 0) *((int *)g_list_nth_data((GList *)data, 1)) = 0;
+
 	return FALSE;
 }
