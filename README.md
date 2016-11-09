@@ -6,9 +6,9 @@ A chat server that uses OpenSSL
 ### 1 Key management
 Following the [OpenSSL coobook](https://www.feistyduck.com/library/openssl-cookbook/online/	), we generated the following:
 * RSA private key called fd.key with the command
-'''
-$ openssl genrsa -aes128 -out fd.key 2048
-'''
+	```
+	$ openssl genrsa -aes128 -out fd.key 2048
+	'''
 * 
 *
 
