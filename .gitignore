@@ -1,5 +1,6 @@
 *.o
 *.swp
 *.log
+*.ini
 chat
 chatd
