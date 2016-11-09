@@ -1,5 +1,5 @@
 # OpenSSL
-:collision::collision::collision:A chat server that uses OpenSSL:collision::collision::collision:
+:collision::collision::collision: A chat server that uses OpenSSL :collision::collision::collision:
 
 Authors
 * Daði Guðvarðarson
