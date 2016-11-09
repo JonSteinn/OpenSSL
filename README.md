@@ -153,20 +153,20 @@ If the client sends a `/list` request, we iterate through the tree of chat rooms
 Initally there is a channel called lobby and all new clients are directed to it. If a client asks to join a channel that does not exist, we create it, and then make him join it. Otherwise we just add him to it directly. If the client leaves (or disconnects) we check his previous channel and if empty, we remove it and clean up its resources. Upon swapping chat rooms, we remove client from the old chat room's subtree and add them to the new one's tree. 
 
 ### 6 Authentication
-#### 6.1
-#### 6.2
+#### 6.1 DANÍEL
+#### 6.2 DANÍEL
 
 
 ### 7 Private messages
-#### 7.1
-#### 7.2
+#### 7.1 DAÐI
+#### 7.2 EINHVER
 
 
 ### 8 Idle timeouts
-#### 8.1
-#### 8.2
+#### 8.1 JONNI
+#### 8.2 EINHVER
 
 
 ### 9 Dice
-#### 9.1
-#### 9.2
+#### 9.1 DAÐI
+#### 9.2 EINHVER
