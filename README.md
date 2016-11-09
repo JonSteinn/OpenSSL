@@ -91,14 +91,58 @@ server_fd = init_server_connection(server_port);
 // Initialize OpenSSL connection
 init_ssl();
 ```
-On the server side, all connection activity (connected, disconnected, timeout, etc) are logged to a file called chat.log with the function 
+On the server side, all connection activity (connected, disconnected, timeout, etc) are logged to a file called `chat.log` with the function 
 ```c
 void client_logger(struct client_data *client, int status)
 ```
 
 
 ### 4 List of connected users
+To suppoert multiple connection, we use `select()` wrapped in the following function.
+```c
+int SELECT(fd_set *rfds, int server_fd)
+{
+	// Restart pool
+	FD_ZERO(rfds);
 
+	// Add file descriptors to pool
+	FD_SET(server_fd, rfds);
+	int max_fd = server_fd;
+
+	// Find the largests file descriptor
+	g_tree_foreach(client_collection, get_max_fd, &max_fd);
+
+	// Add all existing clients to the pool
+	g_tree_foreach(client_collection, fd_set_all, rfds);
+
+	// Set inactive time
+	struct timeval tv;
+	tv.tv_sec = TIME_OUT_CHECK_INTERVAL;
+	tv.tv_usec = 0;
+
+	return select(max_fd + 1, rfds, NULL, NULL, &tv);
+}
+```
+After this function we check if a new client wants to connect with `FD_ISSET(server_fd, &rfds)` and if so, we add him to the list of clients.
+
+The clients are kept in a tree map, that maps the pair of ip address and ports to the following struct.
+```c 
+struct client_data
+{
+	int fd;
+	SSL *ssl;
+	struct sockaddr_in addr;
+	char *name;
+	char *room;
+	time_t timer;
+};
+```
+
+In every iteration of our server loop, we check if a clients has something to say and if one does and has given the who-command, we respond by sending a buffer that has every client appended to it via foreach iteration of the client tree. Foreach client, we will list the following information:
+* name
+* chatroom
+* ip
+* port
 
 
 ### 5 Chat room
