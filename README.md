@@ -26,7 +26,7 @@ The pass phrase is 'tussuduft'.
 
 ### 2 OpenSSL initialisation
 Using the SSL libary, we initialize OpenSSL and the self signed certificate in the following function
-```
+```c
 void init_SSL()
 {
 	// Internal SSL init functions
