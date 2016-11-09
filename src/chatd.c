@@ -47,11 +47,14 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
  * By adding '../' in front, one can run from '/src'. */
 #define CERTIFICATE "encryption/fd.crt"
 #define PRIVATE_KEY "encryption/fd.key"
+#define PASSWORD_FILE "passwd/passwd.ini"
 
 /* Flags for logger */
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
 #define LOG_TIMED_OUT 2
+#define LOG_AUTH_FAIL 3
+#define LOG_AUTH_SUCC 4
 
 /* Metrics for clients */
 #define MAX_QUEUED 5
@@ -589,6 +592,8 @@ void client_logger(struct client_data *client, int status)
 	if (status == LOG_CONNECTED) fwrite(" : <CONNECTED>\n", 1, 15, tof);
 	else if (status == LOG_DISCONNECTED) fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
 	else if (status == LOG_TIMED_OUT)  fwrite(" : <TIMED OUT>\n", 1, 18, tof);
+	else if (status == LOG_AUTH_FAIL)  fwrite(" : <AUTHENTICATION ERROR>\n", 1, 26, tof);
+	else if (status == LOG_AUTH_SUCC)  fwrite(" : <AUTHENTICATED>\n", 1, 19, tof);
 
 	// Release resources
 	fflush(tof);
@@ -723,13 +728,55 @@ void handle_user(struct client_data *client, char *buffer)
 	// Get the new name from buffer
 	char *name = g_strchomp(&buffer[6]);
 	if (SSL_write(client->ssl, "--requestPass", strlen("--requestPass")) < 0) perror("ssl_write");
-	char pass[64];
+	char pass[65];
 	SSL_read(client->ssl, pass, sizeof(pass) - 1);
 
-	
-	
+	//new KeyFile Object
+        GKeyFile *keyfile = g_key_file_new();
+        //Get from the current KeyFile
+        g_key_file_load_from_file(keyfile, PASSWORD_FILE, G_KEY_FILE_NONE, NULL);
+        if (g_key_file_has_key(keyfile, "passwords", name, NULL)) {
+                //User was found
+                //Request Password
+                char *md = g_key_file_get_value(keyfile, "passwords", name, NULL);
+		if (strcmp(md, pass) == 0) {
+			//its a Match!
+			client->name = strdup(name);
+			SSL_write(client->ssl, "Accepted: you have been logged in", 34);
+			client_logger(client, LOG_AUTH_SUCC);
+		} else {
+			client_logger(client, LOG_AUTH_FAIL);
+			//Incorrect passWord
+			int isAuthenticated = 0;
+			for (int i = 0; i < 2; i++) { //Allow 2 more attempts
+				if (SSL_write(client->ssl, "Incorrect username or password", 31) < 0) perror("ssl_write");	
+				if (SSL_write(client->ssl, "--requestPass", strlen("--requestPass")) < 0) perror("ssl_write");
+			        SSL_read(client->ssl, pass, sizeof(pass) - 1);
+				
+				if (strcmp(md, pass) == 0) {
+					SSL_write(client->ssl, "Accepted: you have been logged in", 34);
+					client->name = strdup(name);
+					isAuthenticated = 1;
+					client_logger(client, LOG_AUTH_SUCC);
+					break;
+				}
+				client_logger(client, LOG_AUTH_FAIL);
+			}
+			if (isAuthenticated == 0) {
+				if (SSL_write(client->ssl, "No more attempts. Bye", 21) < 0) perror("ssl_write");
+                                if (SSL_write(client->ssl, "--requestClose", strlen("--requestClose")) < 0) perror("ssl_write");	
+			}
+		}
+        } else {
+		if (SSL_write(client->ssl, "New User created", 16) < 0) perror("ssl_write");
+                //User Not found so we make new one
+                g_key_file_set_string(keyfile, "passwords", name, pass);
+		// Save the file
+		g_key_file_save_to_file (keyfile, PASSWORD_FILE, NULL);
+		client->name = strdup(name);
+		client_logger(client, LOG_AUTH_SUCC);
 
-	client->name = strdup(name);
+        }	
 }
 
 

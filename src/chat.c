@@ -93,6 +93,7 @@ void request_user(char *line);
 void request_passwd();
 void get_passwd ();
 void request_who();
+void sha256(char *string, char outputBuffer[65]);
 
 /* Misc */
 void signal_handler(int signum);
@@ -289,6 +290,9 @@ void client_loop()
 				if (strncmp(buffer, "--requestPass", 13) == 0) {
 					request_passwd();
 					memset(buffer, 0, sizeof(buffer));
+				} else if(strncmp(buffer, "--requestClose", 14) == 0) {
+					running = FALSE;
+					continue;
 				}
 				// Print message from server
 				buffer[size] = '\0';
@@ -546,13 +550,11 @@ void request_user(char *line)
 void request_passwd()
 {
         //TODO random generate and Store
-        char pass[64];
-        char sha256[256];
-        unsigned char salt[20] = "asdfghjkli";
-        size_t size = 0;
-        getpasswd("Enter Password: (Nospaces and shift+Enter when done)", pass, 64);
-	strcpy(sha256, (char*)SHA256((unsigned char*)pass, size, salt));
-	SSL_write(server_ssl, sha256, strlen(sha256));
+        char pass[65];
+        char hashed[65];
+        getpasswd("Enter Password: (Nospaces and shift+Enter when done)", pass, 65);
+	sha256(pass, hashed);
+	SSL_write(server_ssl, hashed, strlen(hashed));
 }
 
 
@@ -609,4 +611,19 @@ void getpasswd(const char *prompt, char *passwd, size_t size)
 	if (tcsetattr(fileno(stdin), TCSANOW, &old_flags) != 0) exit_error("tcsetattr");
 	fflush(stdout);
 	fflush(stdin);
+}
+
+void sha256(char *string, char outputBuffer[65])
+{
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, string, strlen(string));
+    SHA256_Final(hash, &sha256);
+    int i = 0;
+    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        sprintf(outputBuffer + (i * 2), "%02x", hash[i]);
+    }
+    outputBuffer[64] = 0;
 }
