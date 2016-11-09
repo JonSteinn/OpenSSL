@@ -90,7 +90,10 @@ void request_list();
 void request_roll(); // new
 void request_say(char *line);
 void request_user(char *line);
+void request_passwd();
+void get_passwd ();
 void request_who();
+void sha256(char *string, char outputBuffer[65]);
 
 /* Misc */
 void signal_handler(int signum);
@@ -360,6 +363,7 @@ void readline_callback(char *line)
 	else if (strncmp(SAY, line, 4) == 0) request_say(line);
 	else if (strncmp(USER, line, 5) == 0) request_user(line);
 	else if (strncmp(WHO, line, 4) == 0) request_who();
+	else if (strncmp("--requestpass", line, 13) == 0) request_passwd();
 	else
 	{
 		// Place message in buffer
@@ -524,19 +528,68 @@ void request_user(char *line)
 		fsync(STDOUT_FILENO);
 		rl_redisplay();
 	}
-
-	// On error, we won't send anything
-	if (SSL_write(server_ssl, line, strlen(line)) == -1)
-	{
-		perror(USER);
-		return;
+	else {
+		// On error, we won't send anything
+		if (SSL_write(server_ssl, line, strlen(line)) == -1)
+		{
+			perror(USER);
+			return;
+		}
 	}
+
+	char buffer[20];
+	memset(buffer, 0, sizeof(buffer));
+	for (int i = 3; i > 0; i--){
+		request_passwd();
+		if (SSL_read(server_ssl, buffer, sizeof(buffer)) > 0) { 
+			if(strcmp(buffer, "--accepted") == 0) {
+				memset(buffer, 0, sizeof(buffer));
+				fprintf(stdout, "Password Accepted\n");
+                                fflush(stdout);
+				break;
+			} else if (strcmp(buffer, "--newUser") == 0) {
+				memset(buffer, 0, sizeof(buffer));
+				fprintf(stdout, "New user registered\n");
+                                fflush(stdout);
+				break;
+
+			} else if (strcmp(buffer, "--notAvalible") == 0){
+				memset(buffer, 0, sizeof(buffer));
+                                fprintf(stdout, "Someone is already logged in with that username");
+				fflush(stdout);
+				break;
+
+			} else {
+				memset(buffer, 0, sizeof(buffer));
+				fprintf(stdout, "Incorrect password\nRemaining attepmts: %i\n", i-1);
+				if (i <= 1) {
+					fprintf(stdout, "Maxmimum attempts reached, Bye\n");
+					running = FALSE;
+				}
+				fflush(stdout);
+			}
+		}
+	}
+
 }
 
 
 
+//Request password from user;
+void request_passwd()
+{
+        //TODO random generate and Store
+        char pass[65];
+	memset(pass, 0, sizeof(pass));
+        char hashed[65];
+	memset(hashed, 0, sizeof(hashed));
+        getpasswd("Enter Password:", pass, 65);
+	sha256(pass, hashed);
+	SSL_write(server_ssl, hashed, strlen(hashed));
+}
 
 
+                                                                            
 /* Write /who to the server, asking it to provide
  * us a list of all available users */
 void request_who()
@@ -562,6 +615,8 @@ void request_who()
  */
 void getpasswd(const char *prompt, char *passwd, size_t size)
 {
+	fprintf(stdout, "\n");
+	fflush(stdout);
 	struct termios old_flags, new_flags;
 
 	// Clear out the buffer content.
@@ -585,4 +640,21 @@ void getpasswd(const char *prompt, char *passwd, size_t size)
 
 	// Restore the terminal.
 	if (tcsetattr(fileno(stdin), TCSANOW, &old_flags) != 0) exit_error("tcsetattr");
+	fflush(stdout);
+	fflush(stdin);
+}
+
+void sha256(char *string, char outputBuffer[65])
+{
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, string, strlen(string));
+    SHA256_Final(hash, &sha256);
+    int i = 0;
+    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        sprintf(outputBuffer + (i * 2), "%02x", hash[i]);
+    }
+    outputBuffer[64] = 0;
 }

@@ -47,11 +47,14 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
  * By adding '../' in front, one can run from '/src'. */
 #define CERTIFICATE "encryption/fd.crt"
 #define PRIVATE_KEY "encryption/fd.key"
+#define PASSWORD_FILE "passwd/passwd.ini"
 
 /* Flags for logger */
 #define LOG_DISCONNECTED 0
 #define LOG_CONNECTED 1
 #define LOG_TIMED_OUT 2
+#define LOG_AUTH_FAIL 3
+#define LOG_AUTH_SUCC 4
 
 /* Metrics for clients */
 #define MAX_QUEUED 5
@@ -589,6 +592,8 @@ void client_logger(struct client_data *client, int status)
 	if (status == LOG_CONNECTED) fwrite(" : <CONNECTED>\n", 1, 15, tof);
 	else if (status == LOG_DISCONNECTED) fwrite(" : <DISCONNECTED>\n", 1, 18, tof);
 	else if (status == LOG_TIMED_OUT)  fwrite(" : <TIMED OUT>\n", 1, 18, tof);
+	else if (status == LOG_AUTH_FAIL)  fwrite(" : <AUTHENTICATION ERROR>\n", 1, 26, tof);
+	else if (status == LOG_AUTH_SUCC)  fwrite(" : <AUTHENTICATED>\n", 1, 19, tof);
 
 	// Release resources
 	fflush(tof);
@@ -722,6 +727,8 @@ void handle_user(struct client_data *client, char *buffer)
 {
 	// Get the new name from buffer
 	char *name = g_strchomp(&buffer[6]);
+	char pass[65];
+
 	int is_available = 1;
 
 	GList *lst = NULL;
@@ -729,18 +736,63 @@ void handle_user(struct client_data *client, char *buffer)
 	lst = g_list_append(lst, (gpointer)&is_available);
 
 	g_tree_foreach(client_collection, check_availability, lst);
+	
+        SSL_read(client->ssl, pass, sizeof(pass) - 1);
 
-	if (!is_available)
+	if (is_available)
 	{
-		if (SSL_write(client->ssl, "Not available!", strlen("Not available!")) < 0) perror("ssl_write");
-		return;
+		//new KeyFile Object
+		GKeyFile *keyfile = g_key_file_new();
+		//Get from the current KeyFile
+		g_key_file_load_from_file(keyfile, PASSWORD_FILE, G_KEY_FILE_NONE, NULL);
+		if (g_key_file_has_key(keyfile, "passwords", name, NULL)) {
+			//User was found
+			//Request Password
+			char *md = g_key_file_get_value(keyfile, "passwords", name, NULL);
+			if (strcmp(md, pass) == 0) {
+				//its a Match!
+				memset(pass, 0, sizeof(pass));
+				g_free(client->name);
+				client->name = strdup(name);
+				SSL_write(client->ssl, "--accepted", 10);
+				client_logger(client, LOG_AUTH_SUCC);
+			} else {
+				client_logger(client, LOG_AUTH_FAIL);
+				memset(pass, 0, sizeof(pass));
+				//Incorrect passWord
+				for (int i = 0; i < 2; i++) { //Allow 2 more attempts
+					if (SSL_write(client->ssl, "--wrongPass", strlen("--wrongPass")) < 0) perror("ssl_write");
+					SSL_read(client->ssl, pass, sizeof(pass) - 1);
+					
+					if (strcmp(md, pass) == 0) {
+						g_free(client->name);
+						client->name = strdup(name);
+						client_logger(client, LOG_AUTH_SUCC);
+						SSL_write(client->ssl, "--accepted", 10);
+						memset(pass, 0, sizeof(pass));
+						break;
+					}
+					memset(pass, 0, sizeof(pass));
+					client_logger(client, LOG_AUTH_FAIL);
+				}
+			}
+		} else {
+			if (SSL_write(client->ssl, "--newUser", 9) < 0) perror("ssl_write");
+			//User Not found so we make new one
+			g_key_file_set_string(keyfile, "passwords", name, pass);
+			// Save the file
+			memset(pass, 0, sizeof(pass));
+			g_key_file_save_to_file (keyfile, PASSWORD_FILE, NULL);
+			g_free(client->name);
+			client->name = strdup(name);
+			client_logger(client, LOG_AUTH_SUCC);
+
+		}	
+	} else {
+		//not Avalible
+		 if (SSL_write(client->ssl, "--notAvalible", 13) < 0) perror("ssl_write");
 	}
-
-	// Free the value from memory
-	g_free(client->name);
-
-	// Set the new name
-	client->name = strdup(name);
+	memset(pass, 0, sizeof(pass));
 }
 
 
