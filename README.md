@@ -1,6 +1,10 @@
 # OpenSSL
 A chat server that uses OpenSSL
 
+Authors
+* Daði Guðvarðarson
+* Daníel Örn Stefánsson
+* Jón Steinn Elíasson
 
 ## Compile and run
 In the root folder, run the following command to compile.
