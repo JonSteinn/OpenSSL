@@ -284,7 +284,7 @@ void client_loop()
 				perror("Receiving from server failed\n");
 				continue;
 			}
-			else if (size == 0) continue; // TODO: CHANGE TO return; AND TEST. THAT IS THE CORRECT WAY!!!!
+			else if (size == 0) continue;
 			else
 			{
 				// Print message from server
