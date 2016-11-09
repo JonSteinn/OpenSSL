@@ -170,7 +170,14 @@ If no user is found with that username in the password.ini file the server then 
 There are no session tokes passed from the server to the client so upon closing the client you have to log into the server again with username and password.
 
 #### 6.2 
-DANÍEL-------------------------------------
+The passwords are stored in a file on the server, in the passwd folder in the root. There is a file called passwd.ini that stores usernames and their Sha256 hased passwords to match with what users send in.
+There is a hardcoded string that is appended to the user password before we hash it with Sha256. This is done to prevent the use of Rainbow tables and other ways to check the hash string against known common passwords.
+
+We send the passwords hashed from the client to the server since there is no reason for the server to get it in plain text from the client, even tho no one can read them while they are passed through the SSL connection, its a good security mesure for almost no extra time.
+
+No one should be able to read the password in transit due to the nature of the SSL connection, all communications between the server and clients are encrypted by the connection.
+
+The main security implication is how the usernames and passwords are stored, since this is just in a regulare text-file on the server, its easy to just go to the file and replace a hashed password with a hash string that you know the actual password to and then login with that password
 
 
 ### 7 Private messages
