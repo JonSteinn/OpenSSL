@@ -1,9 +1,16 @@
 # OpenSSL
 A chat server that uses OpenSSL
 
-## Questions
+## Questions and implemented features
 
 ### 1 Key management
+Following the [OpenSSL coobook](https://www.feistyduck.com/library/openssl-cookbook/online/	), we generated the following:
+* RSA private key called fd.key with the command
+	'''
+	$ openssl genrsa -aes128 -out fd.key 2048
+	'''
+* 
+*
 
 ### 2 OpenSSL initialisation
 
@@ -20,7 +27,3 @@ A chat server that uses OpenSSL
 ### 8 Idle timeouts
 
 ### 9 Dice
-
-## Server descriptions
-
-## Client description
