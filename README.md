@@ -153,13 +153,19 @@ If the client sends a `/list` request, we iterate through the tree of chat rooms
 Initally there is a channel called lobby and all new clients are directed to it. If a client asks to join a channel that does not exist, we create it, and then make him join it. Otherwise we just add him to it directly. If the client leaves (or disconnects) we check his previous channel and if empty, we remove it and clean up its resources. Upon swapping chat rooms, we remove client from the old chat room's subtree and add them to the new one's tree. 
 
 ### 6 Authentication
-#### 6.1 DANÍEL
-#### 6.2 DANÍEL
+#### 6.1 
+DANÍEL-------------------------------------
+#### 6.2 
+DANÍEL-------------------------------------
 
 
 ### 7 Private messages
-#### 7.1 DAÐI
-#### 7.2 EINHVER
+#### 7.1 
+To handle the private messages, we start by splitting the string sent by the client in two: `char *receiver` and `char *message`.
+We then append the two strings into `GList *list` and search the `client_collection` for the receiver of the message. If the message is found, we send the message to the receiver.
+
+#### 7.2 
+We do not log any private messages as that can not be stored safely. They could contain private information that people would not want to share with anyone. Since we do not sore any of this data, users can not see their history and the chat can not store any information for them, if needed later. 
 
 
 ### 8 Idle timeouts
@@ -167,8 +173,17 @@ Initally there is a channel called lobby and all new clients are directed to it.
 To handle timeouts we kept track of the time for every client with a `time_t` struct. When a new client is added, the current time is set. Whenever select returns 0 (which is set very low), the server checks every client and compares there time to the current time. If it has passed the maximum we disconnect them and log it as a timeout. Whenever a command or message is received from a client, we reset his time to the current.
 
 #### 8.2 
-If we do not close the connection and the client does not terminate it either, anyone who can access the computer can access the chat as the other person. This is the main reason that the banks timeout there clients in their online serivces for example.
+If we do not close the connection and the client does not terminate it either, anyone who can access the computer can access the chat as the other person. This is the main reason that the banks timeout there clients in their online serivces for example. To make sure timeouts happen, we run a check on every client.
 
 ### 9 Dice
-#### 9.1 DAÐI
-#### 9.2 EINHVER
+#### 9.1 
+To start the game we send a request to the client by writing `/game client_name`. If the client exists, we send a message to that client, asking if he wants to start a game. The receiver of the request can then do a `/roll` to generate a random number. 
+This is how we generate the seed which is used by both clients.
+```c
+time_t t;
+srand((unsigned) time(&t));
+```
+Then, when either user rolls the dice, we use `rand() % 5 + 1` to generate a random number from 1 to 6. Both numbers are then checked and we check who the winner is, or if there was a draw.
+The server waits until both players have rolled to calculate the outcome.
+#### 9.2
+The only way to cheat in such a game like this, is to learn the pattern of the pseudo random numbers, returned by `drand48()`. We prevent that by seeding the function with the current time for any game played.
