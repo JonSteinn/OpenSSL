@@ -179,7 +179,7 @@ To handle the private messages, we start by splitting the string sent by the cli
 We then append the two strings into `GList *list` and search the `client_collection` for the receiver of the message. If the message is found, we send the message to the receiver.
 
 #### 7.2 
-We do not log any private messages as that can not be stored safely. They could contain private information that people would not want to share with anyone. Since we do not sore any of this data, users can not see their history and the chat can not store any information for them, if needed later. 
+We do not log any private messages as that can not be stored safely. They could contain private information that people would not want to share with anyone. Since we do not store any of this data, users can not see their history and the chat can not store any information for them, if needed later. 
 
 
 ### 8 Idle timeouts
@@ -191,7 +191,7 @@ If we do not close the connection and the client does not terminate it either, a
 
 ### 9 Dice
 #### 9.1 
-To start the game we send a request to the client by writing `/game client_name`. If the client exists, we send a message to that client, asking if he wants to start a game. The receiver of the request can then do a `/roll` to generate a random number. 
+To start the game we send a request to the client by writing `/game client_name`. We start by searching for the client. If the client exists, we send a message to that client asking if he wants to start a game. The receiver of the request can then do a `/roll` to generate a random number. 
 This is how we generate the seed which is used by both clients.
 ```c
 time_t t;
