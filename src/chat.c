@@ -553,6 +553,12 @@ void request_user(char *line)
                                 fflush(stdout);
 				break;
 
+			} else if (strcmp(buffer, "--notAvalible") == 0){
+				memset(buffer, 0, sizeof(buffer));
+                                fprintf(stdout, "Someone is already logged in with that username");
+				fflush(stdout);
+				break;
+
 			} else {
 				memset(buffer, 0, sizeof(buffer));
 				fprintf(stdout, "Incorrect password\nRemaining attepmts: %i\n", i-1);

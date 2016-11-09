@@ -728,51 +728,71 @@ void handle_user(struct client_data *client, char *buffer)
 	// Get the new name from buffer
 	char *name = g_strchomp(&buffer[6]);
 	char pass[65];
-	SSL_read(client->ssl, pass, sizeof(pass) - 1);
 
-	//new KeyFile Object
-        GKeyFile *keyfile = g_key_file_new();
-        //Get from the current KeyFile
-        g_key_file_load_from_file(keyfile, PASSWORD_FILE, G_KEY_FILE_NONE, NULL);
-        if (g_key_file_has_key(keyfile, "passwords", name, NULL)) {
-                //User was found
-                //Request Password
-                char *md = g_key_file_get_value(keyfile, "passwords", name, NULL);
-		if (strcmp(md, pass) == 0) {
-			//its a Match!
+	int is_available = 1;
+
+	GList *lst = NULL;
+	lst = g_list_append(lst, name);
+	lst = g_list_append(lst, (gpointer)&is_available);
+
+	g_tree_foreach(client_collection, check_availability, lst);
+	
+        SSL_read(client->ssl, pass, sizeof(pass) - 1);
+
+	if (is_available)
+	{
+		//new KeyFile Object
+		GKeyFile *keyfile = g_key_file_new();
+		//Get from the current KeyFile
+		g_key_file_load_from_file(keyfile, PASSWORD_FILE, G_KEY_FILE_NONE, NULL);
+		if (g_key_file_has_key(keyfile, "passwords", name, NULL)) {
+			//User was found
+			//Request Password
+			char *md = g_key_file_get_value(keyfile, "passwords", name, NULL);
+			if (strcmp(md, pass) == 0) {
+				//its a Match!
+				memset(pass, 0, sizeof(pass));
+				g_free(client->name);
+				client->name = strdup(name);
+				SSL_write(client->ssl, "--accepted", 10);
+				client_logger(client, LOG_AUTH_SUCC);
+			} else {
+				client_logger(client, LOG_AUTH_FAIL);
+				memset(pass, 0, sizeof(pass));
+				//Incorrect passWord
+				for (int i = 0; i < 2; i++) { //Allow 2 more attempts
+					if (SSL_write(client->ssl, "--wrongPass", strlen("--wrongPass")) < 0) perror("ssl_write");
+					SSL_read(client->ssl, pass, sizeof(pass) - 1);
+					
+					if (strcmp(md, pass) == 0) {
+						g_free(client->name);
+						client->name = strdup(name);
+						client_logger(client, LOG_AUTH_SUCC);
+						SSL_write(client->ssl, "--accepted", 10);
+						memset(pass, 0, sizeof(pass));
+						break;
+					}
+					memset(pass, 0, sizeof(pass));
+					client_logger(client, LOG_AUTH_FAIL);
+				}
+			}
+		} else {
+			if (SSL_write(client->ssl, "--newUser", 9) < 0) perror("ssl_write");
+			//User Not found so we make new one
+			g_key_file_set_string(keyfile, "passwords", name, pass);
+			// Save the file
+			memset(pass, 0, sizeof(pass));
+			g_key_file_save_to_file (keyfile, PASSWORD_FILE, NULL);
 			g_free(client->name);
 			client->name = strdup(name);
-			SSL_write(client->ssl, "--accepted", 10);
 			client_logger(client, LOG_AUTH_SUCC);
-		} else {
-			client_logger(client, LOG_AUTH_FAIL);
-			//Incorrect passWord
-			for (int i = 0; i < 2; i++) { //Allow 2 more attempts
-				if (SSL_write(client->ssl, "--wrongPass", strlen("--wrongPass")) < 0) perror("ssl_write");
-				memset(pass, 0, sizeof(65));
-			        SSL_read(client->ssl, pass, sizeof(pass) - 1);
-				
-				if (strcmp(md, pass) == 0) {
-					g_free(client->name);
-					client->name = strdup(name);
-					client_logger(client, LOG_AUTH_SUCC);
-					SSL_write(client->ssl, "--accepted", 10);
-					break;
-				}
-				client_logger(client, LOG_AUTH_FAIL);
-			}
-		}
-        } else {
-		if (SSL_write(client->ssl, "--newUser", 9) < 0) perror("ssl_write");
-                //User Not found so we make new one
-                g_key_file_set_string(keyfile, "passwords", name, pass);
-		// Save the file
-		g_key_file_save_to_file (keyfile, PASSWORD_FILE, NULL);
-		g_free(client->name);
-		client->name = strdup(name);
-		client_logger(client, LOG_AUTH_SUCC);
 
-        }	
+		}	
+	} else {
+		//not Avalible
+		 if (SSL_write(client->ssl, "--notAvalible", 13) < 0) perror("ssl_write");
+	}
+	memset(pass, 0, sizeof(pass));
 }
 
 
