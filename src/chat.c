@@ -90,6 +90,8 @@ void request_list();
 void request_roll(); // new
 void request_say(char *line);
 void request_user(char *line);
+void request_passwd();
+void get_passwd ();
 void request_who();
 
 /* Misc */
@@ -284,6 +286,10 @@ void client_loop()
 			else if (size == 0) continue; // TODO: CHANGE TO return; AND TEST. THAT IS THE CORRECT WAY!!!!
 			else
 			{
+				if (strncmp(buffer, "--requestPass", 13) == 0) {
+					request_passwd();
+					memset(buffer, 0, sizeof(buffer));
+				}
 				// Print message from server
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
@@ -524,19 +530,33 @@ void request_user(char *line)
 		fsync(STDOUT_FILENO);
 		rl_redisplay();
 	}
-
-	// On error, we won't send anything
-	if (SSL_write(server_ssl, line, strlen(line)) == -1)
-	{
-		perror(USER);
-		return;
+	else {
+		// On error, we won't send anything
+		if (SSL_write(server_ssl, line, strlen(line)) == -1)
+		{
+			perror(USER);
+			return;
+		}
 	}
 }
 
 
 
+//Request password from user;
+void request_passwd()
+{
+        //TODO random generate and Store
+        char pass[64];
+        char sha256[256];
+        unsigned char salt[20] = "asdfghjkli";
+        size_t size = 0;
+        getpasswd("Enter Password: (Nospaces and shift+Enter when done)", pass, 64);
+	strcpy(sha256, (char*)SHA256((unsigned char*)pass, size, salt));
+	SSL_write(server_ssl, sha256, strlen(sha256));
+}
 
 
+                                                                            
 /* Write /who to the server, asking it to provide
  * us a list of all available users */
 void request_who()
@@ -562,6 +582,8 @@ void request_who()
  */
 void getpasswd(const char *prompt, char *passwd, size_t size)
 {
+	fprintf(stdout, "\n");
+	fflush(stdout);
 	struct termios old_flags, new_flags;
 
 	// Clear out the buffer content.
@@ -585,4 +607,6 @@ void getpasswd(const char *prompt, char *passwd, size_t size)
 
 	// Restore the terminal.
 	if (tcsetattr(fileno(stdin), TCSANOW, &old_flags) != 0) exit_error("tcsetattr");
+	fflush(stdout);
+	fflush(stdin);
 }

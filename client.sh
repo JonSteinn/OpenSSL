@@ -1,2 +1,2 @@
 #!/bin/bash			
-.src/chat $(/labs/tsam16/my_port)
+./src/chat $(/labs/tsam16/my_port)

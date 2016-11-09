@@ -722,24 +722,13 @@ void handle_user(struct client_data *client, char *buffer)
 {
 	// Get the new name from buffer
 	char *name = g_strchomp(&buffer[6]);
-	int is_available = 1;
+	if (SSL_write(client->ssl, "--requestPass", strlen("--requestPass")) < 0) perror("ssl_write");
+	char pass[64];
+	SSL_read(client->ssl, pass, sizeof(pass) - 1);
 
-	GList *lst = NULL;
-	lst = g_list_append(lst, name);
-	lst = g_list_append(lst, (gpointer)&is_available);
+	
+	
 
-	g_tree_foreach(client_collection, check_availability, lst);
-
-	if (!is_available)
-	{
-		if (SSL_write(client->ssl, "Not available!", strlen("Not available!")) < 0) perror("ssl_write");
-		return;
-	}
-
-	// Free the value from memory
-	g_free(client->name);
-
-	// Set the new name
 	client->name = strdup(name);
 }
 
