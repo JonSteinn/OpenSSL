@@ -61,7 +61,7 @@ DANIEL ORN STEFANSSON - DANIEL@STEFNA.IS
 
 /* Timers */
 #define TIME_OUT_CHECK_INTERVAL 1
-#define CLIENT_TIMEOUT 30
+#define CLIENT_TIMEOUT 90
 
 /* Initial namings */
 #define INIT_CHANNEL "Lobby"
