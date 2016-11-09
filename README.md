@@ -155,7 +155,8 @@ Initally there is a channel called lobby and all new clients are directed to it.
 ### 6 Authentication
 #### 6.1 
 The authentication process is split into multiple steps and are split up both on the client and the Server
-The Clients prompts the server to let him know that hes trying to log in with the command:  /user 'username', then the user is asked to enter the password, the password is not displayed on the console so no one can see it.
+
+The Clients prompts the server to let him know that hes trying to log in with the command:  `/user 'username'`, then the user is asked to enter the password, the password is not displayed on the console so no one can see it.
 
 ##### The Client #####
 Hashes the password before sending it to the Server so not even the server knows the password so it is as secure as possible. Then the Client sends the username and the hashed password to the server.
@@ -163,14 +164,14 @@ Hashes the password before sending it to the Server so not even the server knows
 ##### The Server #####
 Checks to see if there is a user already logged in with the given username, if so you can't login, since there can't be two  with the same username.
 
-If no one is logged in with that username the server checks in its password.ini file if the user already exists, if it does, the server matches its stored hashed version of the password with the password it recived from the Client, if they are a match you are logged in to the system, if not you get 2 more tries to give the correct password, failing in doing so will terminate the connection to the server and close the client.
+If no one is logged in with that username the server checks in its `password.ini` file if the user already exists, if it does, the server matches its stored hashed version of the password with the password it recived from the Client, if they are a match you are logged in to the system, if not you get 2 more tries to give the correct password, failing in doing so will terminate the connection to the server and close the client.
 
-If no user is found with that username in the password.ini file the server then saves the user and the password in the file for later use and the user is then logged in.
+If no user is found with that username in the `password.ini` file the server then saves the user and the password in the file for later use and the user is then logged in.
 
 There are no session tokes passed from the server to the client so upon closing the client you have to log into the server again with username and password.
 
 #### 6.2 
-The passwords are stored in a file on the server, in the passwd folder in the root. There is a file called passwd.ini that stores usernames and their Sha256 hased passwords to match with what users send in.
+The passwords are stored in a file on the server, in the `passwd` folder in the root. There is a file called `passwd.ini` that stores usernames and their `Sha256` hased passwords to match with what users send in.
 There is a hardcoded string that is appended to the user password before we hash it with Sha256. This is done to prevent the use of Rainbow tables and other ways to check the hash string against known common passwords.
 
 We send the passwords hashed from the client to the server since there is no reason for the server to get it in plain text from the client, even tho no one can read them while they are passed through the SSL connection, its a good security mesure for almost no extra time.
