@@ -163,7 +163,7 @@ DANÍEL-------------------------------------
 #### 7.1 
 DAÐI-------------------------------------
 #### 7.2 
-EINHVER------------------------------------
+We do not log any private messages as that can not be stored safely. They could contain private information that people would not want to share with anyone. Since we do not sore any of this data, users can not see their history and the chat can not store any information for them, if needed later. 
 
 
 ### 8 Idle timeouts
