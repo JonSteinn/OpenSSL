@@ -727,7 +727,6 @@ void handle_user(struct client_data *client, char *buffer)
 {
 	// Get the new name from buffer
 	char *name = g_strchomp(&buffer[6]);
-	if (SSL_write(client->ssl, "--requestPass", strlen("--requestPass")) < 0) perror("ssl_write");
 	char pass[65];
 	SSL_read(client->ssl, pass, sizeof(pass) - 1);
 
@@ -741,38 +740,35 @@ void handle_user(struct client_data *client, char *buffer)
                 char *md = g_key_file_get_value(keyfile, "passwords", name, NULL);
 		if (strcmp(md, pass) == 0) {
 			//its a Match!
+			g_free(client->name);
 			client->name = strdup(name);
-			SSL_write(client->ssl, "Accepted: you have been logged in", 34);
+			SSL_write(client->ssl, "--accepted", 10);
 			client_logger(client, LOG_AUTH_SUCC);
 		} else {
 			client_logger(client, LOG_AUTH_FAIL);
 			//Incorrect passWord
-			int isAuthenticated = 0;
 			for (int i = 0; i < 2; i++) { //Allow 2 more attempts
-				if (SSL_write(client->ssl, "Incorrect username or password", 31) < 0) perror("ssl_write");	
-				if (SSL_write(client->ssl, "--requestPass", strlen("--requestPass")) < 0) perror("ssl_write");
+				if (SSL_write(client->ssl, "--wrongPass", strlen("--wrongPass")) < 0) perror("ssl_write");
+				memset(pass, 0, sizeof(65));
 			        SSL_read(client->ssl, pass, sizeof(pass) - 1);
 				
 				if (strcmp(md, pass) == 0) {
-					SSL_write(client->ssl, "Accepted: you have been logged in", 34);
+					g_free(client->name);
 					client->name = strdup(name);
-					isAuthenticated = 1;
 					client_logger(client, LOG_AUTH_SUCC);
+					SSL_write(client->ssl, "--accepted", 10);
 					break;
 				}
 				client_logger(client, LOG_AUTH_FAIL);
 			}
-			if (isAuthenticated == 0) {
-				if (SSL_write(client->ssl, "No more attempts. Bye", 21) < 0) perror("ssl_write");
-                                if (SSL_write(client->ssl, "--requestClose", strlen("--requestClose")) < 0) perror("ssl_write");	
-			}
 		}
         } else {
-		if (SSL_write(client->ssl, "New User created", 16) < 0) perror("ssl_write");
+		if (SSL_write(client->ssl, "--newUser", 9) < 0) perror("ssl_write");
                 //User Not found so we make new one
                 g_key_file_set_string(keyfile, "passwords", name, pass);
 		// Save the file
 		g_key_file_save_to_file (keyfile, PASSWORD_FILE, NULL);
+		g_free(client->name);
 		client->name = strdup(name);
 		client_logger(client, LOG_AUTH_SUCC);
 

@@ -287,13 +287,6 @@ void client_loop()
 			else if (size == 0) continue; // TODO: CHANGE TO return; AND TEST. THAT IS THE CORRECT WAY!!!!
 			else
 			{
-				if (strncmp(buffer, "--requestPass", 13) == 0) {
-					request_passwd();
-					memset(buffer, 0, sizeof(buffer));
-				} else if(strncmp(buffer, "--requestClose", 14) == 0) {
-					running = FALSE;
-					continue;
-				}
 				// Print message from server
 				buffer[size] = '\0';
 				fprintf(stdout, "%s\n", buffer);
@@ -370,6 +363,7 @@ void readline_callback(char *line)
 	else if (strncmp(SAY, line, 4) == 0) request_say(line);
 	else if (strncmp(USER, line, 5) == 0) request_user(line);
 	else if (strncmp(WHO, line, 4) == 0) request_who();
+	else if (strncmp("--requestpass", line, 13) == 0) request_passwd();
 	else
 	{
 		// Place message in buffer
@@ -542,6 +536,35 @@ void request_user(char *line)
 			return;
 		}
 	}
+
+	char buffer[20];
+	memset(buffer, 0, sizeof(buffer));
+	for (int i = 3; i > 0; i--){
+		request_passwd();
+		if (SSL_read(server_ssl, buffer, sizeof(buffer)) > 0) { 
+			if(strcmp(buffer, "--accepted") == 0) {
+				memset(buffer, 0, sizeof(buffer));
+				fprintf(stdout, "Password Accepted\n");
+                                fflush(stdout);
+				break;
+			} else if (strcmp(buffer, "--newUser") == 0) {
+				memset(buffer, 0, sizeof(buffer));
+				fprintf(stdout, "New user registered\n");
+                                fflush(stdout);
+				break;
+
+			} else {
+				memset(buffer, 0, sizeof(buffer));
+				fprintf(stdout, "Incorrect password\nRemaining attepmts: %i\n", i-1);
+				if (i <= 1) {
+					fprintf(stdout, "Maxmimum attempts reached, Bye\n");
+					running = FALSE;
+				}
+				fflush(stdout);
+			}
+		}
+	}
+
 }
 
 
@@ -551,8 +574,10 @@ void request_passwd()
 {
         //TODO random generate and Store
         char pass[65];
+	memset(pass, 0, sizeof(pass));
         char hashed[65];
-        getpasswd("Enter Password: (Nospaces and shift+Enter when done)", pass, 65);
+	memset(hashed, 0, sizeof(hashed));
+        getpasswd("Enter Password:", pass, 65);
 	sha256(pass, hashed);
 	SSL_write(server_ssl, hashed, strlen(hashed));
 }
