@@ -1,6 +1,41 @@
 # OpenSSL
 A chat server that uses OpenSSL
 
+
+## Compile and run
+In the root folder, run the following command to compile.
+```bash
+make -C src/
+```
+To run the server, enter
+```bash
+./src/chatd 8000
+```
+which will open the server on port 8000. Any non-system port can be chosen. To run the client, enter
+```bash
+./src/chat 8000
+```
+A server must be running locally on the same port in order to run the client. The localhost in hardcoded in the server but that is easy to change.
+
+
+## List of client commands
+Command | Action
+--- | --- | ---
+`/bye` | exit
+`/quit` | exit
+`/game <user>` | prompt a user to play a game
+`/join <chat room>` | join a chat room
+`/list` | get a list of all chat rooms
+`/roll` | roll in a game
+`/say <user>` | send a private message
+`/user <name>` | identify as a user
+`/who` | get a list of all users
+`/yes` | accept a game prompt
+`/no` |  decline a game prompt
+'string' | send 'string' to current chat room
+
+
+
 ## Questions and implemented features
 
 ### 1 Key management
@@ -44,9 +79,26 @@ void init_SSL()
 	fflush(stdout);
 }
 ```
+If the user does not enter 'tussuduft', he will not be granted access to run up the server.
 
 
 ### 3 Secure client server connection
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### 4 List of connected users
 
