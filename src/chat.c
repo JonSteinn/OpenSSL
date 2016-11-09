@@ -583,8 +583,14 @@ void request_passwd()
 	memset(pass, 0, sizeof(pass));
         char hashed[65];
 	memset(hashed, 0, sizeof(hashed));
-        getpasswd("Enter Password:", pass, 65);
-	sha256(pass, hashed);
+
+	getpasswd("Enter Password:", pass, 65);
+	
+	GString *passwd = g_string_new(NULL) ;
+	passwd = g_string_append(passwd, pass);
+        passwd = g_string_append(passwd, "SaltThisHacker!?#");
+
+	sha256(passwd->str, hashed);
 	SSL_write(server_ssl, hashed, strlen(hashed));
 }
 
