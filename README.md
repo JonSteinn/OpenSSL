@@ -166,8 +166,8 @@ Initally there is a channel called lobby and all new clients are directed to it.
 #### 8.1 
 To handle timeouts we kept track of the time for every client with a `time_t` struct. When a new client is added, the current time is set. Whenever select returns 0 (which is set very low), the server checks every client and compares there time to the current time. If it has passed the maximum we disconnect them and log it as a timeout. Whenever a command or message is received from a client, we reset his time to the current.
 
-#### 8.2 EINHVER
-
+#### 8.2 
+If we do not close the connection and the client does not terminate it either, anyone who can access the computer can access the chat as the other person. This is the main reason that the banks timeout there clients in their online serivces for example.
 
 ### 9 Dice
 #### 9.1 DAÐI
