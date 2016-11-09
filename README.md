@@ -32,7 +32,7 @@ Command | Action
 `/who` | get a list of all users
 `/yes` | accept a game prompt
 `/no` |  decline a game prompt
-'string' | send 'string' to current chat room
+`<message>` | send 'string' to current chat room
 
 
 
@@ -83,31 +83,41 @@ If the user does not enter 'tussuduft', he will not be granted access to run up 
 
 
 ### 3 Secure client server connection
+To connect to the client we must use the standard socket c library and make a SSL connection using the OpenSSL libary. This is accomplished with the following function calling in main.
+```c
+// Connect to server
+server_fd = init_server_connection(server_port);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// Initialize OpenSSL connection
+init_ssl();
+```
+On the server side, all connection activity (connected, disconnected, timeout, etc) are logged to a file called chat.log with the function 
+```c
+void client_logger(struct client_data *client, int status)
+```
 
 
 ### 4 List of connected users
 
+
+
 ### 5 Chat room
 
 ### 6 Authentication
+#### 6.1
+#### 6.2
+
 
 ### 7 Private messages
+#### 7.1
+#### 7.2
+
 
 ### 8 Idle timeouts
+#### 8.1
+#### 8.2
+
 
 ### 9 Dice
+#### 9.1
+#### 9.2
