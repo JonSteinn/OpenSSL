@@ -146,6 +146,11 @@ In every iteration of our server loop, we check if a clients has something to sa
 
 
 ### 5 Chat room
+Chat rooms are kept in a tree that maps their name to another tree of users. The subtree holds the users currently in that channel. Although, a different tree from the client one, it uses the same memory. That is, suppose some client belongs to the tree of clients and a some subtree for a specific channel, then the memory allocated for him in the client tree is the same in the chat room's subtree. This means that memory is never freed in that tree, we only remove its entries. 
+
+If the client sends a `/list` request, we iterate through the tree of chat rooms and append their name to a buffer which is sent to the appropriate client. No information, other than its name, are kept for the chat rooms but the subtree keeps track of its count of course, so we have easy access to the client count in each channel.
+
+Initally there is a channel called lobby and all new clients are directed to it. If a client asks to join a channel that does not exist, we create it, and then make him join it. Otherwise we just add him to it directly. If the client leaves (or disconnects) we check his previous channel and if empty, we remove it and clean up its resources. Upon swapping chat rooms, we remove client from the old chat room's subtree and add them to the new one's tree. 
 
 ### 6 Authentication
 #### 6.1
