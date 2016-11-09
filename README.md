@@ -21,7 +21,7 @@ A server must be running locally on the same port in order to run the client. Th
 ## List of client commands
 Command | Action
 --- | --- | ---
-`/bye` | exit
+``/bye`` | exit
 `/quit` | exit
 `/game <user>` | prompt a user to play a game
 `/join <chat room>` | join a chat room
