@@ -18,6 +18,10 @@ which will open the server on port 8000. Any non-system port can be chosen. To r
 A server must be running locally on the same port in order to run the client. The localhost in hardcoded in the server but that is easy to change.
 
 
+## Video demo
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/o2lv3EBrp68/maxresdefault.jpg)](https://www.youtube.com/watch?v=o2lv3EBrp68)
+
+
 ## List of client commands
 Command | Action
 | --- | --- |
